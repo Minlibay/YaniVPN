@@ -99,6 +99,11 @@ PostUp = iptables -t nat -A POSTROUTING -o $OUT_IFACE -j MASQUERADE; iptables -A
 PostDown = iptables -t nat -D POSTROUTING -o $OUT_IFACE -j MASQUERADE; iptables -D FORWARD -i wg0 -j ACCEPT; iptables -D FORWARD -o wg0 -j ACCEPT
 WGEOF
 
+# Открываем UDP-порт WireGuard, если включён ufw (иначе рукопожатие не пройдёт)
+if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+  ufw allow "$WG_PORT"/udp >/dev/null 2>&1 || true
+fi
+
 systemctl enable wg-quick@wg0 >/dev/null 2>&1
 systemctl restart wg-quick@wg0
 

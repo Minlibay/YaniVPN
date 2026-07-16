@@ -87,6 +87,9 @@ npm run dev                 # http://localhost:3000
 прописывается агентам. Ручная установка агента по-прежнему возможна:
 [agent/README.md](agent/README.md).
 
+Полный прогон «настоящая нода + приложение на телефоне, реальный туннель» —
+в [docs/real-connection.md](docs/real-connection.md).
+
 ## Структура
 
 ```

@@ -26,6 +26,8 @@ PROTOCOL="${PROTOCOL:-wireguard}"
 WG_IFACE="${WG_IFACE:-wg0}"
 XRAY_CONFIG="${XRAY_CONFIG:-/usr/local/etc/xray/config.json}"
 XRAY_API="${XRAY_API:-127.0.0.1:10085}"
+# Интервал отчёта/синхронизации в секундах (для теста можно уменьшить)
+INTERVAL="${INTERVAL:-60}"
 
 # --- WireGuard -------------------------------------------------------------
 
@@ -114,9 +116,9 @@ main() {
         wg_sync "$response" || echo "[yanivpn-agent] ошибка синхронизации WireGuard" >&2
       fi
     else
-      echo "[yanivpn-agent] панель недоступна, повтор через минуту" >&2
+      echo "[yanivpn-agent] панель недоступна, повтор позже" >&2
     fi
-    sleep 60
+    sleep "$INTERVAL"
   done
 }
 
