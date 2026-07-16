@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 
 import '../models/server_info.dart';
-import '../theme.dart';
 
 /// Строка сервера в списке: флаг, название, протокол, статус и кнопка.
 class ServerTile extends StatelessWidget {
@@ -72,7 +71,7 @@ class _ProtocolChip extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(vless ? 'VLESS' : 'WireGuard',

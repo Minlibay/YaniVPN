@@ -116,7 +116,7 @@ class _PriceCard extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: kBrandBlue.withOpacity(0.15),
+                color: kBrandBlue.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(10),
               ),
               child: const Icon(Icons.all_inclusive, color: kBrandBlue),

@@ -19,7 +19,7 @@ ThemeData buildTheme() {
       elevation: 0,
       centerTitle: false,
     ),
-    cardTheme: CardTheme(
+    cardTheme: CardThemeData(
       color: kSurfaceRaised,
       elevation: 0,
       shape: RoundedRectangleBorder(
