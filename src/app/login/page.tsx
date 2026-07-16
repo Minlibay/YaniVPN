@@ -1,10 +1,8 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 
 export default function LoginPage() {
-  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -14,18 +12,24 @@ export default function LoginPage() {
     e.preventDefault();
     setLoading(true);
     setError(null);
-    const res = await fetch("/api/auth/login", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
-    });
-    setLoading(false);
-    if (res.ok) {
-      router.push("/");
-      router.refresh();
-    } else {
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (res.ok) {
+        // Полная перезагрузка вместо client-side навигации: middleware
+        // гарантированно увидит свежую сессионную куку.
+        window.location.assign("/");
+        return;
+      }
       const data = await res.json().catch(() => null);
       setError(data?.error ?? "Ошибка входа");
+      setLoading(false);
+    } catch {
+      setError("Сервер недоступен, попробуйте ещё раз");
+      setLoading(false);
     }
   }
 
