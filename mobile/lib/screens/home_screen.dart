@@ -6,6 +6,8 @@ import '../api/api_client.dart';
 import '../models/server_info.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
+import '../widgets/brand.dart';
+import '../widgets/connect_button.dart';
 import '../widgets/server_tile.dart';
 import '../widgets/usage_bar.dart';
 import 'settings_screen.dart';
@@ -18,25 +20,29 @@ class HomeScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     return Consumer<AppState>(
       builder: (context, state, _) {
-        return Scaffold(
-          appBar: AppBar(
-            title: const Text('Yani', style: TextStyle(fontWeight: FontWeight.bold)),
-            actions: [
-              IconButton(
-                icon: const Icon(Icons.settings_outlined),
-                onPressed: state.account == null
-                    ? null
-                    : () => Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const SettingsScreen()),
-                        ),
-              ),
-            ],
+        return AppBackground(
+          child: Scaffold(
+            backgroundColor: Colors.transparent,
+            appBar: AppBar(
+              title: const BrandWordmark(),
+              actions: [
+                IconButton(
+                  icon: const Icon(Icons.settings_outlined, color: kTextDim),
+                  onPressed: state.account == null
+                      ? null
+                      : () => Navigator.of(context).push(
+                            MaterialPageRoute(builder: (_) => const SettingsScreen()),
+                          ),
+                ),
+              ],
+            ),
+            body: switch (state.phase) {
+              AppPhase.loading =>
+                const Center(child: CircularProgressIndicator(color: kBrandBlue)),
+              AppPhase.error => _ErrorView(message: state.errorMessage ?? 'Ошибка'),
+              AppPhase.ready => _Content(state: state),
+            },
           ),
-          body: switch (state.phase) {
-            AppPhase.loading => const Center(child: CircularProgressIndicator()),
-            AppPhase.error => _ErrorView(message: state.errorMessage ?? 'Ошибка'),
-            AppPhase.ready => _Content(state: state),
-          },
         );
       },
     );
@@ -88,6 +94,16 @@ class _Content extends StatelessWidget {
     }
   }
 
+  Future<void> _onServerTap(BuildContext context, ServerInfo server) async {
+    final wasActive = state.activeServerId == server.id && state.isConnected;
+    state.selectServer(server);
+    // Переключение на другой сервер при активном туннеле — переподключаемся.
+    if (state.isConnected && !wasActive) {
+      await state.disconnect();
+      if (context.mounted) await _connect(context, server);
+    }
+  }
+
   Future<void> _showConfigSheet(
     BuildContext context, {
     required String title,
@@ -105,15 +121,15 @@ class _Content extends StatelessWidget {
           children: [
             Text(title, style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
             const SizedBox(height: 8),
-            Text(note, style: const TextStyle(color: Colors.white70, fontSize: 13)),
+            Text(note, style: const TextStyle(color: kTextDim, fontSize: 13)),
             const SizedBox(height: 16),
             Container(
               width: double.infinity,
               constraints: const BoxConstraints(maxHeight: 200),
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: kSurface,
-                borderRadius: BorderRadius.circular(10),
+                color: kBg,
+                borderRadius: BorderRadius.circular(12),
                 border: Border.all(color: kBorder),
               ),
               child: SingleChildScrollView(
@@ -144,37 +160,97 @@ class _Content extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final account = state.account!;
+    final selected = state.selectedServer;
+    final connecting = state.isBusy;
+    final connected = state.isConnected;
+
+    final statusText = connecting
+        ? 'Устанавливаем защищённое соединение…'
+        : connected
+            ? 'Ваш трафик зашифрован'
+            : 'Нажмите, чтобы подключиться';
+
     return RefreshIndicator(
+      color: kBrandBlue,
       onRefresh: () async {
         await state.refreshServers();
         await state.refreshUsage();
       },
       child: ListView(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
+          const SizedBox(height: 16),
+          Center(
+            child: ConnectButton(
+              connected: connected,
+              connecting: connecting,
+              enabled: selected != null && !connecting,
+              onTap: () {
+                if (connected) {
+                  state.disconnect();
+                } else if (selected != null) {
+                  _connect(context, selected);
+                }
+              },
+            ),
+          ),
+          const SizedBox(height: 12),
+          AnimatedSwitcher(
+            duration: const Duration(milliseconds: 250),
+            child: Text(
+              statusText,
+              key: ValueKey(statusText),
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: connected ? kBrandCyan : kTextDim,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
           UsageBar(
             account: account,
             onBuy: () => Navigator.of(context).push(
               MaterialPageRoute(builder: (_) => const PaywallScreen()),
             ),
           ),
-          const SizedBox(height: 20),
-          Text('Серверы', style: Theme.of(context).textTheme.titleMedium),
-          const SizedBox(height: 8),
+          const SizedBox(height: 28),
+          Row(
+            children: [
+              Text(
+                'ЛОКАЦИИ',
+                style: TextStyle(
+                  color: kTextDim.withValues(alpha: 0.8),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 2,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${state.servers.length}',
+                style: const TextStyle(color: kTextDim, fontSize: 12),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
           if (state.servers.isEmpty)
             const Padding(
               padding: EdgeInsets.symmetric(vertical: 40),
-              child: Center(child: Text('Серверов пока нет', style: TextStyle(color: Colors.white54))),
+              child: Center(
+                child: Text('Серверов пока нет', style: TextStyle(color: kTextDim)),
+              ),
             ),
           for (final server in state.servers)
             Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: ServerTile(
                 server: server,
-                isActive: state.activeServerId == server.id && state.isConnected,
-                isConnecting: state.activeServerId == server.id && state.isBusy,
-                onConnect: () => _connect(context, server),
-                onDisconnect: state.disconnect,
+                isSelected: selected?.id == server.id,
+                isActive: state.activeServerId == server.id && connected,
+                isConnecting: state.activeServerId == server.id && connecting,
+                onTap: () => _onServerTap(context, server),
               ),
             ),
         ],
@@ -195,9 +271,9 @@ class _ErrorView extends StatelessWidget {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.cloud_off, size: 48, color: Colors.white38),
+            const Icon(Icons.cloud_off, size: 48, color: kTextDim),
             const SizedBox(height: 16),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: Colors.white70)),
+            Text(message, textAlign: TextAlign.center, style: const TextStyle(color: kTextDim)),
             const SizedBox(height: 20),
             FilledButton(
               onPressed: () => context.read<AppState>().init(),

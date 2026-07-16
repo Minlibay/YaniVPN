@@ -45,7 +45,7 @@ class VpnService {
   /// Поток статуса подключения от системного VPN (на вебе — пустой).
   Stream<VpnStatus> statusStream() {
     if (kIsWeb || _wg == null) return const Stream<VpnStatus>.empty();
-    return _wg!.vpnStageSnapshot.map((stage) {
+    return _wg.vpnStageSnapshot.map((stage) {
       switch (stage) {
         case VpnStage.connected:
           return VpnStatus.connected;

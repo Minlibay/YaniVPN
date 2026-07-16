@@ -14,102 +14,154 @@ class SettingsScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final state = context.watch<AppState>();
     final code = state.account?.code ?? '';
+    final isPaid = state.account?.plan == 'paid';
 
-    return Scaffold(
-      appBar: AppBar(title: const Text('Настройки')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Ваш конфигурационный код',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Сохраните его. Введите этот код на другом устройстве, чтобы '
-                    'продолжить пользоваться VPN с тем же трафиком.',
-                    style: TextStyle(color: Colors.white60, fontSize: 13),
-                  ),
-                  const SizedBox(height: 16),
-                  Center(
-                    child: Container(
-                      padding: const EdgeInsets.all(10),
+    return AppBackground(
+      child: Scaffold(
+        backgroundColor: Colors.transparent,
+        appBar: AppBar(title: const Text('Настройки')),
+        body: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kBrandBlue.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.key_rounded,
+                              color: kBrandBlue, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text('Ваш конфигурационный код',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Сохраните его. Введите этот код на другом устройстве, чтобы '
+                      'продолжить пользоваться VPN с тем же трафиком.',
+                      style: TextStyle(color: kTextDim, fontSize: 13),
+                    ),
+                    const SizedBox(height: 16),
+                    Center(
+                      child: Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: kBrandBlue.withValues(alpha: 0.25),
+                              blurRadius: 30,
+                            ),
+                          ],
+                        ),
+                        child: QrImageView(data: code, size: 180),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        borderRadius: BorderRadius.circular(10),
+                        color: kBg,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: kBorder),
                       ),
-                      child: QrImageView(data: code, size: 180),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: kSurface,
-                      borderRadius: BorderRadius.circular(10),
-                      border: Border.all(color: kBorder),
-                    ),
-                    child: SelectableText(
-                      code,
-                      style: const TextStyle(
-                        fontFamily: 'monospace',
-                        fontSize: 15,
-                        letterSpacing: 1,
+                      child: SelectableText(
+                        code,
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 15,
+                          letterSpacing: 1,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 10),
-                  SizedBox(
-                    width: double.infinity,
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.copy, size: 18),
-                      label: const Text('Скопировать код'),
-                      onPressed: () {
-                        Clipboard.setData(ClipboardData(text: code));
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Код скопирован')),
-                        );
-                      },
+                    const SizedBox(height: 10),
+                    SizedBox(
+                      width: double.infinity,
+                      child: FilledButton.icon(
+                        icon: const Icon(Icons.copy, size: 18),
+                        label: const Text('Скопировать код'),
+                        onPressed: () {
+                          Clipboard.setData(ClipboardData(text: code));
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Код скопирован')),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 16),
-          Card(
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const Text('Войти по коду',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
-                  const SizedBox(height: 6),
-                  const Text(
-                    'Перенос аккаунта с другого устройства. Текущий код будет заменён.',
-                    style: TextStyle(color: Colors.white60, fontSize: 13),
-                  ),
-                  const SizedBox(height: 12),
-                  FilledButton.tonal(
-                    onPressed: () => _showRestoreDialog(context),
-                    child: const Text('Ввести код'),
-                  ),
-                ],
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kSuccess.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.devices_rounded,
+                              color: kSuccess, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text('Войти по коду',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Перенос аккаунта с другого устройства. Текущий код будет заменён.',
+                      style: TextStyle(color: kTextDim, fontSize: 13),
+                    ),
+                    const SizedBox(height: 12),
+                    FilledButton.tonal(
+                      onPressed: () => _showRestoreDialog(context),
+                      child: const Text('Ввести код'),
+                    ),
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(height: 24),
-          Center(
-            child: Text('Аккаунт: ${state.account?.plan == 'paid' ? 'платный' : 'бесплатный'}',
-                style: const TextStyle(color: Colors.white38, fontSize: 12)),
-          ),
-        ],
+            const SizedBox(height: 24),
+            Center(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+                decoration: BoxDecoration(
+                  color: (isPaid ? kBrandBlue : kTextDim).withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  isPaid ? 'Премиум-аккаунт' : 'Бесплатный аккаунт',
+                  style: TextStyle(
+                    color: isPaid ? kBrandCyan : kTextDim,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -124,7 +176,6 @@ class SettingsScreen extends StatelessWidget {
         var busy = false;
         return StatefulBuilder(
           builder: (dialogContext, setSt) => AlertDialog(
-            backgroundColor: kSurfaceRaised,
             title: const Text('Вход по коду'),
             content: Column(
               mainAxisSize: MainAxisSize.min,
@@ -135,12 +186,11 @@ class SettingsScreen extends StatelessWidget {
                   textCapitalization: TextCapitalization.characters,
                   decoration: const InputDecoration(
                     hintText: 'YANI-XXXX-XXXX-XXXX-XXXX',
-                    border: OutlineInputBorder(),
                   ),
                 ),
                 if (error != null) ...[
                   const SizedBox(height: 10),
-                  Text(error!, style: const TextStyle(color: Colors.redAccent, fontSize: 13)),
+                  Text(error!, style: const TextStyle(color: kDanger, fontSize: 13)),
                 ],
               ],
             ),

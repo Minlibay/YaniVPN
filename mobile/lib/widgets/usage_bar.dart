@@ -15,7 +15,8 @@ String formatBytes(int bytes) {
   return '${n.toStringAsFixed(digits)} ${units[i]}';
 }
 
-/// Полоса «использовано / лимит» с подписью и кнопкой апгрейда при исчерпании.
+/// Карточка квоты: градиентная полоса «использовано / лимит»,
+/// у платного плана — значок безлимита.
 class UsageBar extends StatelessWidget {
   const UsageBar({super.key, required this.account, required this.onBuy});
 
@@ -30,7 +31,14 @@ class UsageBar extends StatelessWidget {
           padding: const EdgeInsets.all(16),
           child: Row(
             children: [
-              const Icon(Icons.all_inclusive, color: kBrandBlue),
+              Container(
+                padding: const EdgeInsets.all(9),
+                decoration: BoxDecoration(
+                  gradient: kBrandGradient,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: const Icon(Icons.all_inclusive, color: Colors.white, size: 20),
+              ),
               const SizedBox(width: 12),
               Text('Безлимитный доступ',
                   style: Theme.of(context).textTheme.titleMedium),
@@ -52,28 +60,45 @@ class UsageBar extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 const Text('Бесплатный трафик',
-                    style: TextStyle(color: Colors.white70)),
+                    style: TextStyle(color: kTextDim, fontSize: 13)),
                 Text(
                   '${formatBytes(account.dataUsed)} / ${formatBytes(account.dataLimit)}',
-                  style: const TextStyle(fontFeatures: [FontFeature.tabularFigures()]),
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w600,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
                 ),
               ],
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 12),
+            // Градиентная полоса прогресса; при исчерпании — красная.
             ClipRRect(
               borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(
-                value: fraction,
-                minHeight: 8,
-                backgroundColor: kBorder,
-                color: danger ? Colors.redAccent : kBrandBlue,
+              child: SizedBox(
+                height: 8,
+                child: Stack(
+                  children: [
+                    Container(color: kBg),
+                    FractionallySizedBox(
+                      widthFactor: fraction == 0 ? 0.005 : fraction,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          gradient: danger ? null : kBrandGradient,
+                          color: danger ? kDanger : null,
+                        ),
+                        child: const SizedBox.expand(),
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
             if (danger) ...[
               const SizedBox(height: 12),
               const Text(
                 'Лимит исчерпан. Купите доступ, чтобы продолжить.',
-                style: TextStyle(color: Colors.redAccent, fontSize: 13),
+                style: TextStyle(color: kDanger, fontSize: 13),
               ),
               const SizedBox(height: 10),
               SizedBox(

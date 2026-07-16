@@ -39,6 +39,20 @@ class AppState extends ChangeNotifier {
   String? _activeServerId;
   String? get activeServerId => _activeServerId;
 
+  // Сервер, выбранный для подключения большой кнопкой на главном экране.
+  String? _selectedServerId;
+  ServerInfo? get selectedServer {
+    for (final s in servers) {
+      if (s.id == _selectedServerId) return s;
+    }
+    return null;
+  }
+
+  void selectServer(ServerInfo server) {
+    _selectedServerId = server.id;
+    notifyListeners();
+  }
+
   // Последняя VLESS-ссылка для импорта (когда встроенного туннеля ещё нет).
   String? vlessLinkForImport;
 
@@ -88,6 +102,12 @@ class AppState extends ChangeNotifier {
   Future<void> refreshServers() async {
     if (account == null) return;
     servers = await _api.servers(account!.code);
+    // Выбор по умолчанию: первый онлайн-сервер (или первый в списке).
+    if (selectedServer == null && servers.isNotEmpty) {
+      _selectedServerId = servers
+          .firstWhere((s) => s.online, orElse: () => servers.first)
+          .id;
+    }
     notifyListeners();
   }
 
