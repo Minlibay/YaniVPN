@@ -19,7 +19,7 @@ dependencies:
   # Генерация пары ключей WireGuard (X25519) на устройстве
   cryptography: ^2.7.0
   # Туннель WireGuard (NetworkExtension на iOS, VpnService на Android)
-  wireguard_flutter: ^0.2.1
+  wireguard_flutter: ^0.1.3
   # QR-код конфиг-кода и VLESS-ссылки
   qr_flutter: ^4.1.0
   cupertino_icons: ^1.0.8
