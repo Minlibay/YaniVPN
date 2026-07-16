@@ -1,0 +1,61 @@
+# YaniVPN: панель + PostgreSQL + Caddy (HTTPS с автоматическим Let's Encrypt).
+#
+# Настройка — в .env рядом с этим файлом (см. .env.example, раздел Docker):
+#   DOMAIN            домен панели, напр. panel.yanivpn.space
+#   ACME_EMAIL        почта для Let's Encrypt
+#   POSTGRES_PASSWORD пароль базы
+#   AUTH_SECRET       секрет сессий (openssl rand -hex 32)
+#   ADMIN_EMAIL / ADMIN_PASSWORD  учётка администратора (создаётся сидом)
+#
+# Запуск: docker compose up -d --build
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: yanivpn
+      POSTGRES_USER: yanivpn
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Задайте POSTGRES_PASSWORD в .env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U yanivpn -d yanivpn"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  panel:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql://yanivpn:${POSTGRES_PASSWORD}@db:5432/yanivpn
+      AUTH_SECRET: ${AUTH_SECRET:?Задайте AUTH_SECRET в .env}
+      PANEL_URL: https://${DOMAIN:?Задайте DOMAIN в .env}
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-admin@yanivpn.local}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-admin123}
+      ALLOW_MOCK_PURCHASE: ${ALLOW_MOCK_PURCHASE:-}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:?Задайте ACME_EMAIL в .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - panel
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

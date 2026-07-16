@@ -52,14 +52,18 @@ Flutter-клиент в [`mobile/`](mobile/README.md): без регистрац
 ## Стек
 
 - [Next.js 14](https://nextjs.org) (App Router) + TypeScript + Tailwind CSS
-- [Prisma](https://prisma.io) + SQLite (для продакшена меняется на PostgreSQL
-  правкой `datasource` в `prisma/schema.prisma` и `DATABASE_URL`)
+- [Prisma](https://prisma.io) + PostgreSQL
 - Recharts для графиков, jose для сессий, bcryptjs для паролей
+- Продакшен: Docker Compose (панель + PostgreSQL + Caddy c автоматическим HTTPS)
 
 ## Быстрый старт
 
 ```bash
 cp .env.example .env        # задайте AUTH_SECRET и пароль админа
+# PostgreSQL для разработки (или свой локальный):
+docker run -d --name yanivpn-db -p 5432:5432 \
+  -e POSTGRES_DB=yanivpn -e POSTGRES_USER=yanivpn -e POSTGRES_PASSWORD=yanivpn \
+  postgres:16-alpine
 npm install
 npx prisma db push          # создать базу
 SEED_DEMO=1 npm run db:seed # админ + демо-данные (без флага — только админ)
@@ -71,8 +75,9 @@ npm run dev                 # http://localhost:3000
 Вход по умолчанию: `admin@yanivpn.local` / `admin123`
 (переопределяется через `ADMIN_EMAIL` / `ADMIN_PASSWORD` до запуска сида).
 
-Развернуть панель на VPS (HTTP по IP) — одной командой, см.
-[deploy/README.md](deploy/README.md).
+Продакшен-деплой — Docker Compose с PostgreSQL и автоматическим HTTPS
+(Let's Encrypt): [deploy/docker.md](deploy/docker.md). Старый вариант
+(systemd, HTTP по IP) — [deploy/README.md](deploy/README.md).
 
 ## Подключение реальной ноды
 
@@ -114,6 +119,6 @@ src/lib/         auth (JWT-сессии), wg + vless (ключи/ссылки), 
 - [x] QR-код конфига для импорта в приложение
 - [x] Мобильное приложение на Flutter (iOS/Android)
 - [x] Лимит трафика (2 ГБ) и экран покупки доступа
+- [x] Миграция на PostgreSQL и деплой через Docker Compose (+ HTTPS через Caddy)
 - [ ] Встроенный туннель VLESS в приложении (Xray-core mobile)
 - [ ] Реальная оплата: In-App Purchase + серверная валидация чека
-- [ ] Миграция на PostgreSQL и деплой через Docker Compose

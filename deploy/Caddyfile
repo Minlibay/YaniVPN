@@ -1,0 +1,10 @@
+# Обратный прокси панели YaniVPN.
+# Caddy сам выпускает и продлевает сертификат Let's Encrypt для {$DOMAIN};
+# уведомления об истечении приходят на {$ACME_EMAIL}.
+{
+	email {$ACME_EMAIL}
+}
+
+{$DOMAIN} {
+	reverse_proxy panel:3000
+}
