@@ -62,12 +62,17 @@ Flutter-клиент в [`mobile/`](mobile/README.md): без регистрац
 cp .env.example .env        # задайте AUTH_SECRET и пароль админа
 npm install
 npx prisma db push          # создать базу
-npm run db:seed             # админ + демо-данные
+SEED_DEMO=1 npm run db:seed # админ + демо-данные (без флага — только админ)
 npm run dev                 # http://localhost:3000
 ```
 
+На Windows PowerShell: `$env:SEED_DEMO=1; npm run db:seed`.
+
 Вход по умолчанию: `admin@yanivpn.local` / `admin123`
 (переопределяется через `ADMIN_EMAIL` / `ADMIN_PASSWORD` до запуска сида).
+
+Развернуть панель на VPS (HTTP по IP) — одной командой, см.
+[deploy/README.md](deploy/README.md).
 
 ## Подключение реальной ноды
 

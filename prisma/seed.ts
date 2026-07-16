@@ -26,6 +26,13 @@ async function main() {
   });
   console.log(`Админ: ${email} / ${password}`);
 
+  // Демо-серверы создаются только при SEED_DEMO=1 (локальная разработка).
+  // На боевой панели их не нужно — реальные ноды добавляются через интерфейс.
+  if (process.env.SEED_DEMO !== "1") {
+    console.log("Демо-данные пропущены (для них запустите с SEED_DEMO=1).");
+    return;
+  }
+
   if ((await prisma.server.count()) > 0) {
     console.log("Серверы уже есть — демо-данные не создаю.");
     return;

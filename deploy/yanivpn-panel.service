@@ -1,0 +1,17 @@
+[Unit]
+Description=YaniVPN panel (Next.js)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=__WORKDIR__
+EnvironmentFile=__WORKDIR__/.env
+Environment=NODE_ENV=production
+Environment=PORT=3000
+ExecStart=__WORKDIR__/node_modules/.bin/next start -p 3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
