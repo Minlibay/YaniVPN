@@ -8,7 +8,8 @@ WORKDIR /app
 RUN apk add --no-cache openssl
 
 COPY package.json package-lock.json ./
-RUN npm ci
+# Кэш npm чистим в том же слое — иначе он раздувает образ на сотни МБ
+RUN npm ci --no-audit --no-fund && npm cache clean --force
 
 COPY . .
 
