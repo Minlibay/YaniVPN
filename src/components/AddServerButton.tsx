@@ -4,13 +4,15 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
 import { SshFields, initialSsh, sshPayload, type SshForm } from "./SshFields";
+import { DEFAULT_REALITY_SNI, type Protocol } from "@/lib/vless";
 
-const initial = { name: "", host: "", port: "51820", country: "", city: "" };
+const initial = { name: "", host: "", port: "", country: "", city: "", sni: "" };
 
 export function AddServerButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
+  const [protocol, setProtocol] = useState<Protocol>("wireguard");
   const [ssh, setSsh] = useState<SshForm>(initialSsh);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -20,6 +22,8 @@ export function AddServerButton() {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
+  const defaultPort = protocol === "vless" ? "443" : "51820";
+
   async function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
@@ -27,7 +31,16 @@ export function AddServerButton() {
     const res = await fetch("/api/servers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, port: Number(form.port), ssh: sshPayload(ssh) }),
+      body: JSON.stringify({
+        name: form.name,
+        host: form.host,
+        country: form.country,
+        city: form.city,
+        protocol,
+        ...(form.port ? { port: Number(form.port) } : {}),
+        ...(protocol === "vless" && form.sni ? { sni: form.sni } : {}),
+        ssh: sshPayload(ssh),
+      }),
     });
     setLoading(false);
     if (res.ok) {
@@ -42,6 +55,7 @@ export function AddServerButton() {
   function close() {
     setOpen(false);
     setForm(initial);
+    setProtocol("wireguard");
     setSsh(initialSsh);
     setError(null);
     setCreated(false);
@@ -63,7 +77,8 @@ export function AddServerButton() {
         {created ? (
           <div>
             <p className="mb-4 text-sm text-slate-400">
-              Панель подключается к серверу по SSH и устанавливает WireGuard, настраивает сеть и
+              Панель подключается к серверу по SSH и устанавливает{" "}
+              {protocol === "vless" ? "Xray (VLESS + Reality)" : "WireGuard"}, настраивает сеть и
               запускает агента. Обычно это занимает 1–3 минуты — статус в таблице обновится
               автоматически.
             </p>
@@ -76,6 +91,24 @@ export function AddServerButton() {
           </div>
         ) : (
           <form onSubmit={onSubmit} className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1">
+            <div>
+              <label className="mb-1 block text-xs text-slate-400">Протокол</label>
+              <div className="grid grid-cols-2 gap-2">
+                <ProtocolTile
+                  active={protocol === "wireguard"}
+                  onClick={() => setProtocol("wireguard")}
+                  title="WireGuard"
+                  desc="Быстрый, лучший для мобильных"
+                />
+                <ProtocolTile
+                  active={protocol === "vless"}
+                  onClick={() => setProtocol("vless")}
+                  title="VLESS + Reality"
+                  desc="Обход блокировок, маскировка под HTTPS"
+                />
+              </div>
+            </div>
+
             <div>
               <label className="mb-1 block text-xs text-slate-400">Название</label>
               <input
@@ -98,13 +131,13 @@ export function AddServerButton() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-slate-400">Порт WG</label>
+                <label className="mb-1 block text-xs text-slate-400">Порт</label>
                 <input
-                  required
                   type="number"
                   min={1}
                   max={65535}
                   className={inputCls}
+                  placeholder={defaultPort}
                   value={form.port}
                   onChange={(e) => set("port", e.target.value)}
                 />
@@ -133,11 +166,27 @@ export function AddServerButton() {
               </div>
             </div>
 
+            {protocol === "vless" && (
+              <div>
+                <label className="mb-1 block text-xs text-slate-400">Домен маскировки (SNI)</label>
+                <input
+                  className={inputCls}
+                  placeholder={DEFAULT_REALITY_SNI}
+                  value={form.sni}
+                  onChange={(e) => set("sni", e.target.value)}
+                />
+                <p className="mt-1 text-xs text-slate-500">
+                  Под этот сайт маскируется трафик. Нужен популярный HTTPS-сайт с TLS 1.3,
+                  которого нет в списке блокировок (например {DEFAULT_REALITY_SNI}).
+                </p>
+              </div>
+            )}
+
             <SshFields value={ssh} onChange={setSsh} />
 
             <p className="text-xs text-slate-500">
-              Панель сама установит WireGuard и агента на сервер (Debian/Ubuntu) и получит его
-              публичный ключ.
+              Панель сама установит {protocol === "vless" ? "Xray" : "WireGuard"} и агента на
+              сервер (Debian/Ubuntu) и получит ключи для клиентов.
             </p>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button
@@ -151,5 +200,32 @@ export function AddServerButton() {
         )}
       </Modal>
     </>
+  );
+}
+
+function ProtocolTile({
+  active,
+  onClick,
+  title,
+  desc,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-lg border p-3 text-left transition ${
+        active
+          ? "border-[#3987e5] bg-[#3987e5]/10"
+          : "border-surface-border hover:border-slate-500"
+      }`}
+    >
+      <div className="text-sm font-medium">{title}</div>
+      <div className="mt-0.5 text-xs text-slate-500">{desc}</div>
+    </button>
   );
 }

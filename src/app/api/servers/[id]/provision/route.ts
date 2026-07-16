@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { provisionServer } from "@/lib/provision";
 import { panelUrlFrom, sshSchema } from "@/lib/sshInput";
+import { isProtocol } from "@/lib/vless";
 
 type Params = { params: { id: string } };
 
@@ -32,9 +33,14 @@ export async function POST(req: NextRequest, { params }: Params) {
   void provisionServer(
     server.id,
     { host: server.host, ...parsed.data },
-    server.port,
-    panelUrlFrom(req),
-    server.apiToken
+    {
+      protocol: isProtocol(server.protocol) ? server.protocol : "wireguard",
+      port: server.port,
+      panelUrl: panelUrlFrom(req),
+      apiToken: server.apiToken,
+      shortId: server.realityShortId,
+      sni: server.realitySni,
+    }
   );
 
   return NextResponse.json({ ok: true, status: "installing" });

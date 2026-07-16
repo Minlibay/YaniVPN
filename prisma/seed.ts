@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
-import { generateKeyPairSync, randomBytes } from "crypto";
+import { generateKeyPairSync, randomBytes, randomUUID } from "crypto";
 
 const prisma = new PrismaClient();
 
@@ -34,17 +34,21 @@ async function main() {
   // Демо-серверы и клиенты, чтобы дашборд не был пустым.
   // Удалите их и добавьте реальные ноды через панель.
   const serversData = [
-    { name: "Amsterdam-1", host: "185.10.20.30", country: "NL", city: "Амстердам" },
-    { name: "Frankfurt-1", host: "185.40.50.60", country: "DE", city: "Франкфурт" },
-    { name: "Helsinki-1", host: "95.216.10.20", country: "FI", city: "Хельсинки" },
+    { name: "Amsterdam-1", host: "185.10.20.30", country: "NL", city: "Амстердам", protocol: "wireguard" },
+    { name: "Frankfurt-1", host: "185.40.50.60", country: "DE", city: "Франкфурт", protocol: "wireguard" },
+    { name: "Helsinki-VLESS", host: "95.216.10.20", country: "FI", city: "Хельсинки", protocol: "vless" },
   ];
 
   const now = Date.now();
   for (const [si, s] of serversData.entries()) {
+    const vless = s.protocol === "vless";
     const server = await prisma.server.create({
       data: {
         ...s,
-        publicKey: wgKey(),
+        port: vless ? 443 : 51820,
+        publicKey: wgKey(), // для vless играет роль Reality public key (демо)
+        realityShortId: vless ? randomBytes(8).toString("hex") : "",
+        realitySni: vless ? "www.microsoft.com" : "",
         apiToken: randomBytes(32).toString("hex"),
         status: "active",
         // первые два сервера "онлайн", третий давно молчит
@@ -62,8 +66,10 @@ async function main() {
       await prisma.peer.create({
         data: {
           name: `client-${si + 1}-${i + 1}`,
-          publicKey: wgKey(),
-          allowedIp: `10.8.0.${i + 2}/32`,
+          // vless-клиент идентифицируется UUID, wireguard — ключом и адресом
+          publicKey: vless ? null : wgKey(),
+          allowedIp: vless ? "" : `10.8.0.${i + 2}/32`,
+          uuid: vless ? randomUUID() : null,
           serverId: server.id,
           enabled: i !== 1,
           lastHandshakeAt: online
@@ -96,7 +102,7 @@ async function main() {
     await prisma.statSample.createMany({ data: samples });
   }
 
-  console.log("Демо-данные созданы: 3 сервера, клиенты и статистика за сутки.");
+  console.log("Демо-данные созданы: 3 сервера (2 WireGuard + 1 VLESS), клиенты и статистика за сутки.");
 }
 
 main()

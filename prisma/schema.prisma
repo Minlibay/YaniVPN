@@ -16,35 +16,46 @@ model Admin {
   createdAt    DateTime @default(now())
 }
 
-// VPN-сервер (нода). На каждой ноде работает WireGuard + агент,
+// VPN-сервер (нода). На каждой ноде работает выбранный протокол + агент,
 // который авторизуется по apiToken и отправляет статистику.
 model Server {
-  id         String   @id @default(cuid())
-  name       String
-  host       String // публичный IP или домен
-  port       Int      @default(51820)
-  country    String // ISO-код страны, например "NL"
-  city       String   @default("")
-  publicKey  String   @default("") // публичный ключ WG; заполняется автоустановкой
-  apiToken   String   @unique // токен для агента ноды
-  // installing → active | error; active = WireGuard и агент установлены
+  id       String @id @default(cuid())
+  name     String
+  host     String // публичный IP или домен
+  port     Int    @default(51820)
+  country  String // ISO-код страны, например "NL"
+  city     String @default("")
+  // wireguard | vless (VLESS+Reality, обход блокировок)
+  protocol  String @default("wireguard")
+  publicKey String @default("") // WG: pubkey интерфейса; VLESS: Reality public key (отдаётся клиентам)
+  apiToken  String @unique // токен для агента ноды
+
+  // Параметры VLESS+Reality (заполняются автоустановкой)
+  realityPrivateKey String @default("")
+  realityShortId    String @default("") // короткий ID Reality
+  realitySni        String @default("") // домен маскировки, напр. www.microsoft.com
+
+  // installing → active | error; active = протокол и агент установлены
   status         String  @default("active")
   provisionError String? // хвост лога установки при статусе error
-  lastSeenAt DateTime? // последний отчёт агента; определяет online/offline
-  createdAt  DateTime @default(now())
+  lastSeenAt     DateTime? // последний отчёт агента; определяет online/offline
+  createdAt      DateTime @default(now())
 
   peers   Peer[]
   samples StatSample[]
 }
 
-// Клиент (пир WireGuard). Позже станет учёткой пользователя мобильного приложения.
+// Клиент. Идентификатор зависит от протокола сервера:
+// WireGuard — пара ключей + адрес в туннеле; VLESS — UUID.
+// Позже станет учёткой пользователя мобильного приложения.
 model Peer {
   id              String    @id @default(cuid())
   name            String
-  publicKey       String    @unique
-  allowedIp       String // адрес клиента в туннеле, например 10.8.0.5/32
+  publicKey       String?   @unique // WireGuard: публичный ключ клиента
+  allowedIp       String    @default("") // WireGuard: адрес в туннеле, напр. 10.8.0.5/32
+  uuid            String?   @unique // VLESS: UUID клиента
   enabled         Boolean   @default(true)
-  lastHandshakeAt DateTime?
+  lastHandshakeAt DateTime? // последняя активность (WG: handshake, VLESS: движение трафика)
   rxBytes         BigInt    @default(0) // всего принято сервером от клиента
   txBytes         BigInt    @default(0) // всего отправлено клиенту
   createdAt       DateTime  @default(now())

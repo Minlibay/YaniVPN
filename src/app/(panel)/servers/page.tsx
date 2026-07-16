@@ -4,6 +4,20 @@ import { AddServerButton } from "@/components/AddServerButton";
 import { ServerActions } from "@/components/ServerActions";
 import { AutoRefresh } from "@/components/AutoRefresh";
 
+function ProtocolBadge({ protocol }: { protocol: string }) {
+  const vless = protocol === "vless";
+  return (
+    <span
+      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
+        vless ? "bg-[#008300]/15 text-emerald-400" : "bg-[#3987e5]/15 text-[#7db4f0]"
+      }`}
+      title={vless ? "VLESS + Reality — обход блокировок" : "WireGuard"}
+    >
+      {vless ? "VLESS" : "WireGuard"}
+    </span>
+  );
+}
+
 function StatusBadge({ status, online }: { status: string; online: boolean }) {
   if (status === "installing") {
     return (
@@ -56,6 +70,7 @@ export default async function ServersPage() {
           <thead>
             <tr className="text-left text-xs text-slate-500">
               <th className="px-5 py-3 font-medium">Сервер</th>
+              <th className="px-5 py-3 font-medium">Протокол</th>
               <th className="px-5 py-3 font-medium">Адрес</th>
               <th className="px-5 py-3 font-medium">Статус</th>
               <th className="px-5 py-3 font-medium">Активные</th>
@@ -76,6 +91,9 @@ export default async function ServersPage() {
                     <span className="mr-2">{countryFlag(s.country)}</span>
                     <span className="font-medium">{s.name}</span>
                     {s.city && <span className="ml-2 text-xs text-slate-500">{s.city}</span>}
+                  </td>
+                  <td className="px-5 py-3">
+                    <ProtocolBadge protocol={s.protocol} />
                   </td>
                   <td className="px-5 py-3 font-mono text-xs text-slate-400">
                     {s.host}:{s.port}
@@ -102,7 +120,7 @@ export default async function ServersPage() {
             })}
             {servers.length === 0 && (
               <tr>
-                <td colSpan={7} className="px-5 py-10 text-center text-slate-500">
+                <td colSpan={8} className="px-5 py-10 text-center text-slate-500">
                   Серверов пока нет. Нажмите «Добавить сервер», чтобы подключить первую ноду.
                 </td>
               </tr>

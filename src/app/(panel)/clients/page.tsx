@@ -10,11 +10,11 @@ export default async function ClientsPage() {
   const [peers, servers] = await Promise.all([
     prisma.peer.findMany({
       orderBy: { createdAt: "desc" },
-      include: { server: { select: { name: true, country: true } } },
+      include: { server: { select: { name: true, country: true, protocol: true } } },
     }),
     prisma.server.findMany({
       where: { status: "active" },
-      select: { id: true, name: true, country: true },
+      select: { id: true, name: true, country: true, protocol: true },
     }),
   ]);
 
@@ -23,7 +23,11 @@ export default async function ClientsPage() {
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Клиенты</h1>
         <AddClientButton
-          servers={servers.map((s) => ({ id: s.id, label: `${countryFlag(s.country)} ${s.name}` }))}
+          servers={servers.map((s) => ({
+            id: s.id,
+            label: `${countryFlag(s.country)} ${s.name}`,
+            protocol: s.protocol,
+          }))}
         />
       </div>
 
@@ -33,7 +37,7 @@ export default async function ClientsPage() {
             <tr className="text-left text-xs text-slate-500">
               <th className="px-5 py-3 font-medium">Клиент</th>
               <th className="px-5 py-3 font-medium">Сервер</th>
-              <th className="px-5 py-3 font-medium">IP в туннеле</th>
+              <th className="px-5 py-3 font-medium">Адрес / ID</th>
               <th className="px-5 py-3 font-medium">Статус</th>
               <th className="px-5 py-3 font-medium">Принято</th>
               <th className="px-5 py-3 font-medium">Отправлено</th>
@@ -53,7 +57,11 @@ export default async function ClientsPage() {
                   <td className="px-5 py-3 text-slate-400">
                     {countryFlag(p.server.country)} {p.server.name}
                   </td>
-                  <td className="px-5 py-3 font-mono text-xs text-slate-400">{p.allowedIp}</td>
+                  <td className="px-5 py-3 font-mono text-xs text-slate-400">
+                    {p.server.protocol === "vless"
+                      ? `${(p.uuid ?? "").slice(0, 8)}…`
+                      : p.allowedIp}
+                  </td>
                   <td className="px-5 py-3">
                     {!p.enabled ? (
                       <span className="text-slate-500">отключён</span>

@@ -2,15 +2,17 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { buildClientConfig, generateWgKeyPair, nextClientIp } from "@/lib/wg";
+import { buildVlessLink, generateClientUuid } from "@/lib/vless";
 
 const createPeerSchema = z.object({
   name: z.string().min(1).max(100),
   serverId: z.string().min(1),
 });
 
-// Создаёт клиента: генерирует пару ключей WireGuard, выделяет адрес
-// в туннельной подсети и возвращает готовый клиентский конфиг.
-// Приватный ключ клиента НЕ сохраняется — только отдаётся в ответе.
+// Создаёт клиента для выбранного сервера.
+// WireGuard: генерирует пару ключей и адрес в туннеле, отдаёт .conf.
+// VLESS: генерирует UUID, отдаёт ссылку vless://… для импорта в приложение.
+// Секреты клиента (приватный ключ WG) на сервере НЕ хранятся.
 export async function POST(req: NextRequest) {
   const body = await req.json().catch(() => null);
   const parsed = createPeerSchema.safeParse(body);
@@ -29,6 +31,26 @@ export async function POST(req: NextRequest) {
     return NextResponse.json(
       { error: "Сервер ещё не настроен — дождитесь окончания установки" },
       { status: 409 }
+    );
+  }
+
+  if (server.protocol === "vless") {
+    const uuid = generateClientUuid();
+    const peer = await prisma.peer.create({
+      data: { name: parsed.data.name, uuid, serverId: server.id },
+    });
+    const link = buildVlessLink({
+      uuid,
+      host: server.host,
+      port: server.port,
+      publicKey: server.publicKey,
+      shortId: server.realityShortId,
+      sni: server.realitySni,
+      name: `${parsed.data.name}@${server.name}`,
+    });
+    return NextResponse.json(
+      { id: peer.id, protocol: "vless", uuid, link, config: link },
+      { status: 201 }
     );
   }
 
@@ -53,7 +75,7 @@ export async function POST(req: NextRequest) {
   });
 
   return NextResponse.json(
-    { id: peer.id, publicKey: keys.publicKey, allowedIp, config },
+    { id: peer.id, protocol: "wireguard", publicKey: keys.publicKey, allowedIp, config },
     { status: 201 }
   );
 }

@@ -2,22 +2,22 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 
-// Отчёт агента, работающего на VPN-ноде.
-// Агент раз в минуту читает `wg show <iface> dump` и присылает сюда
-// состояние всех пиров. Авторизация — Bearer-токен сервера (apiToken).
+// Отчёт агента, работающего на VPN-ноде. Авторизация — Bearer-токен сервера.
+// Клиент идентифицируется полем `id`: для WireGuard это публичный ключ пира,
+// для VLESS — UUID клиента. `latestHandshake` шлёт только WireGuard (время
+// последнего рукопожатия); для VLESS активность выводится из роста трафика.
 const reportSchema = z.object({
   peers: z.array(
     z.object({
-      publicKey: z.string().min(1),
-      // unix-время последнего handshake в секундах; 0 = не было
-      latestHandshake: z.number().int().nonnegative(),
+      id: z.string().min(1),
+      latestHandshake: z.number().int().nonnegative().optional(),
       rxBytes: z.number().int().nonnegative(),
       txBytes: z.number().int().nonnegative(),
     })
   ),
 });
 
-const HANDSHAKE_ACTIVE_MS = 3 * 60 * 1000;
+const ACTIVE_MS = 3 * 60 * 1000;
 
 export async function POST(req: NextRequest) {
   const auth = req.headers.get("authorization") ?? "";
@@ -38,49 +38,67 @@ export async function POST(req: NextRequest) {
   }
 
   const now = new Date();
+
+  // Текущие пиры сервера — чтобы сопоставить отчёт и вывести активность VLESS
+  // по приросту трафика (у VLESS нет аналога WG-handshake).
+  const known = await prisma.peer.findMany({
+    where: { serverId: server.id },
+    select: { id: true, publicKey: true, uuid: true, rxBytes: true, txBytes: true },
+  });
+  const byIdentifier = new Map<string, (typeof known)[number]>();
+  for (const p of known) {
+    if (p.publicKey) byIdentifier.set(p.publicKey, p);
+    if (p.uuid) byIdentifier.set(p.uuid, p);
+  }
+
   let activePeers = 0;
   let totalRx = 0n;
   let totalTx = 0n;
 
-  for (const p of parsed.data.peers) {
-    const lastHandshakeAt = p.latestHandshake > 0 ? new Date(p.latestHandshake * 1000) : null;
-    if (lastHandshakeAt && now.getTime() - lastHandshakeAt.getTime() < HANDSHAKE_ACTIVE_MS) {
+  for (const r of parsed.data.peers) {
+    const peer = byIdentifier.get(r.id);
+    if (!peer) continue; // чужой/неизвестный клиент — игнорируем
+
+    const rxBytes = BigInt(r.rxBytes);
+    const txBytes = BigInt(r.txBytes);
+    totalRx += rxBytes;
+    totalTx += txBytes;
+
+    // Данные обновления. WireGuard всегда выставляет lastHandshakeAt (в т.ч. null);
+    // VLESS выставляет now только при движении трафика, иначе оставляет прежнее.
+    const data: { rxBytes: bigint; txBytes: bigint; lastHandshakeAt?: Date | null } = {
+      rxBytes,
+      txBytes,
+    };
+    let activeAt: Date | null = null;
+
+    if (r.latestHandshake !== undefined) {
+      activeAt = r.latestHandshake > 0 ? new Date(r.latestHandshake * 1000) : null;
+      data.lastHandshakeAt = activeAt;
+    } else if (rxBytes > peer.rxBytes || txBytes > peer.txBytes) {
+      activeAt = now;
+      data.lastHandshakeAt = now;
+    }
+
+    if (activeAt && now.getTime() - activeAt.getTime() < ACTIVE_MS) {
       activePeers++;
     }
-    totalRx += BigInt(p.rxBytes);
-    totalTx += BigInt(p.txBytes);
 
-    // Обновляем только известных панели пиров; чужие ключи игнорируем
-    await prisma.peer.updateMany({
-      where: { publicKey: p.publicKey, serverId: server.id },
-      data: {
-        lastHandshakeAt,
-        rxBytes: BigInt(p.rxBytes),
-        txBytes: BigInt(p.txBytes),
-      },
-    });
+    await prisma.peer.update({ where: { id: peer.id }, data });
   }
 
   await prisma.$transaction([
-    prisma.server.update({
-      where: { id: server.id },
-      data: { lastSeenAt: now },
-    }),
+    prisma.server.update({ where: { id: server.id }, data: { lastSeenAt: now } }),
     prisma.statSample.create({
-      data: {
-        serverId: server.id,
-        activePeers,
-        rxBytes: totalRx,
-        txBytes: totalTx,
-      },
+      data: { serverId: server.id, activePeers, rxBytes: totalRx, txBytes: totalTx },
     }),
   ]);
 
-  // Агент получает список включённых пиров — может синхронизировать
-  // конфигурацию WireGuard (добавить новых клиентов, убрать отключённых).
+  // Список включённых клиентов для синхронизации ноды.
+  // WireGuard-агент использует publicKey+allowedIp, VLESS-агент — uuid.
   const peers = await prisma.peer.findMany({
     where: { serverId: server.id, enabled: true },
-    select: { publicKey: true, allowedIp: true },
+    select: { publicKey: true, allowedIp: true, uuid: true },
   });
 
   return NextResponse.json({ ok: true, peers });
