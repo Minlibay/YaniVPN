@@ -179,24 +179,20 @@ class _Content extends StatelessWidget {
       child: ListView(
         padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
         children: [
-          const SizedBox(height: 16),
           Center(
-            child: _MascotConnect(
-              child: ConnectButton(
-                connected: connected,
-                connecting: connecting,
-                enabled: selected != null && !connecting,
-                onTap: () {
-                  if (connected) {
-                    state.disconnect();
-                  } else if (selected != null) {
-                    _connect(context, selected);
-                  }
-                },
-              ),
+            child: ConnectButton(
+              connected: connected,
+              connecting: connecting,
+              enabled: selected != null && !connecting,
+              onTap: () {
+                if (connected) {
+                  state.disconnect();
+                } else if (selected != null) {
+                  _connect(context, selected);
+                }
+              },
             ),
           ),
-          const SizedBox(height: 12),
           AnimatedSwitcher(
             duration: const Duration(milliseconds: 250),
             child: Text(
@@ -255,39 +251,6 @@ class _Content extends StatelessWidget {
                 onTap: () => _onServerTap(context, server),
               ),
             ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Маскот YaniVPN сидит на кнопке подключения: лапы свисают за верхний
-/// край кольца, а сама кнопка (включая градиент и свечение) остаётся живой.
-/// Геометрия повторяет исходный арт: кот масштабирован к диаметру кольца.
-class _MascotConnect extends StatelessWidget {
-  const _MascotConnect({required this.child});
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 246,
-      height: 348,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          Positioned(bottom: 0, left: 0, child: child),
-          Positioned(
-            top: 0,
-            left: 15,
-            child: IgnorePointer(
-              child: Image.asset(
-                'assets/images/mascot_cat.png',
-                width: 245,
-                filterQuality: FilterQuality.medium,
-              ),
-            ),
-          ),
         ],
       ),
     );
