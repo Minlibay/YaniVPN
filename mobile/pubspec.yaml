@@ -1,0 +1,33 @@
+name: yanivpn
+description: YaniVPN — мобильный клиент (iOS/Android)
+publish_to: "none"
+version: 0.1.0+1
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+  flutter: ">=3.19.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  # Состояние приложения
+  provider: ^6.1.2
+  # Сеть
+  http: ^1.2.2
+  # Локальное хранение конфиг-кода и ключей WireGuard
+  shared_preferences: ^2.3.2
+  # Генерация пары ключей WireGuard (X25519) на устройстве
+  cryptography: ^2.7.0
+  # Туннель WireGuard (NetworkExtension на iOS, VpnService на Android)
+  wireguard_flutter: ^0.2.1
+  # QR-код конфиг-кода и VLESS-ссылки
+  qr_flutter: ^4.1.0
+  cupertino_icons: ^1.0.8
+
+dev_dependencies:
+  flutter_lints: ^4.0.0
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true

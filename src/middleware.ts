@@ -3,8 +3,9 @@ import { jwtVerify } from "jose";
 
 const SESSION_COOKIE = "yanivpn_session";
 
-// Всё, кроме логина и API агента, требует сессии администратора.
-const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/agent"];
+// Всё, кроме логина, API агентов и API приложения, требует сессии администратора.
+// /api/app/* авторизуется собственным кодом аккаунта (Bearer), не admin-сессией.
+const PUBLIC_PATHS = ["/login", "/api/auth/login", "/api/agent", "/api/app"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;

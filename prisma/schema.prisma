@@ -16,6 +16,19 @@ model Admin {
   createdAt    DateTime @default(now())
 }
 
+// Аккаунт пользователя мобильного приложения. Регистрации нет: при первом
+// запуске приложение получает `code` — портативную личность, которую можно
+// перенести на другое устройство и продолжить пользоваться VPN.
+model Account {
+  id        String   @id @default(cuid())
+  code      String   @unique // конфигурационный код (секрет, живёт на устройствах)
+  plan      String   @default("free") // free | paid
+  dataLimit BigInt   @default(2147483648) // лимит трафика для free: 2 ГБ
+  createdAt DateTime @default(now())
+
+  peers Peer[]
+}
+
 // VPN-сервер (нода). На каждой ноде работает выбранный протокол + агент,
 // который авторизуется по apiToken и отправляет статистику.
 model Server {
@@ -63,7 +76,13 @@ model Peer {
   serverId String
   server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
 
+  // Пиры, выпущенные через приложение, привязаны к аккаунту (для учёта квоты).
+  // Пиры, созданные вручную в панели, аккаунта не имеют.
+  accountId String?
+  account   Account? @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
   @@index([serverId])
+  @@index([accountId])
 }
 
 // Срез статистики по серверу; пишется при каждом отчёте агента.
