@@ -9,6 +9,9 @@
 
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
+# Отключаем интерактивный needrestart (иначе apt зависает на диалоге)
+export NEEDRESTART_MODE=a
+export NEEDRESTART_SUSPEND=1
 
 REPO_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$REPO_DIR"
