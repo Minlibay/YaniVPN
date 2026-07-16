@@ -2,6 +2,33 @@ import { prisma } from "@/lib/db";
 import { countryFlag, formatBytes, formatRelative, isOnline, ONLINE_THRESHOLD_MS } from "@/lib/format";
 import { AddServerButton } from "@/components/AddServerButton";
 import { ServerActions } from "@/components/ServerActions";
+import { AutoRefresh } from "@/components/AutoRefresh";
+
+function StatusBadge({ status, online }: { status: string; online: boolean }) {
+  if (status === "installing") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-[#7db4f0]">
+        <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-[#3987e5]" /> установка…
+      </span>
+    );
+  }
+  if (status === "error") {
+    return (
+      <span className="inline-flex items-center gap-1.5 text-red-400">
+        <span className="h-1.5 w-1.5 rounded-full bg-red-400" /> ошибка
+      </span>
+    );
+  }
+  return online ? (
+    <span className="inline-flex items-center gap-1.5 text-emerald-400">
+      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> онлайн
+    </span>
+  ) : (
+    <span className="inline-flex items-center gap-1.5 text-slate-500">
+      <span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> офлайн
+    </span>
+  );
+}
 
 export const dynamic = "force-dynamic";
 
@@ -14,8 +41,11 @@ export default async function ServersPage() {
     },
   });
 
+  const installing = servers.some((s) => s.status === "installing");
+
   return (
     <div>
+      {installing && <AutoRefresh />}
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold">Серверы</h1>
         <AddServerButton />
@@ -42,7 +72,7 @@ export default async function ServersPage() {
               const traffic = s.peers.reduce((acc, p) => acc + p.rxBytes + p.txBytes, 0n);
               return (
                 <tr key={s.id} className="border-t border-surface-border/60">
-                  <td className="px-5 py-3">
+                  <td className="whitespace-nowrap px-5 py-3">
                     <span className="mr-2">{countryFlag(s.country)}</span>
                     <span className="font-medium">{s.name}</span>
                     {s.city && <span className="ml-2 text-xs text-slate-500">{s.city}</span>}
@@ -51,15 +81,7 @@ export default async function ServersPage() {
                     {s.host}:{s.port}
                   </td>
                   <td className="px-5 py-3">
-                    {isOnline(s.lastSeenAt) ? (
-                      <span className="inline-flex items-center gap-1.5 text-emerald-400">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> онлайн
-                      </span>
-                    ) : (
-                      <span className="inline-flex items-center gap-1.5 text-slate-500">
-                        <span className="h-1.5 w-1.5 rounded-full bg-slate-500" /> офлайн
-                      </span>
-                    )}
+                    <StatusBadge status={s.status} online={isOnline(s.lastSeenAt)} />
                   </td>
                   <td className="px-5 py-3 tabular-nums">
                     {active} / {s.peers.length}
@@ -67,7 +89,13 @@ export default async function ServersPage() {
                   <td className="px-5 py-3 tabular-nums">{formatBytes(traffic)}</td>
                   <td className="px-5 py-3 text-slate-400">{formatRelative(s.lastSeenAt)}</td>
                   <td className="px-5 py-3 text-right">
-                    <ServerActions serverId={s.id} serverName={s.name} apiToken={s.apiToken} />
+                    <ServerActions
+                      serverId={s.id}
+                      serverName={s.name}
+                      apiToken={s.apiToken}
+                      status={s.status}
+                      provisionError={s.provisionError}
+                    />
                   </td>
                 </tr>
               );

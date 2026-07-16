@@ -3,17 +3,18 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Modal } from "./Modal";
-import { CopyField } from "./CopyField";
+import { SshFields, initialSsh, sshPayload, type SshForm } from "./SshFields";
 
-const initial = { name: "", host: "", port: "51820", country: "", city: "", publicKey: "" };
+const initial = { name: "", host: "", port: "51820", country: "", city: "" };
 
 export function AddServerButton() {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState(initial);
+  const [ssh, setSsh] = useState<SshForm>(initialSsh);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [createdToken, setCreatedToken] = useState<string | null>(null);
+  const [created, setCreated] = useState(false);
 
   function set<K extends keyof typeof initial>(key: K, value: string) {
     setForm((f) => ({ ...f, [key]: value }));
@@ -26,12 +27,11 @@ export function AddServerButton() {
     const res = await fetch("/api/servers", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...form, port: Number(form.port) }),
+      body: JSON.stringify({ ...form, port: Number(form.port), ssh: sshPayload(ssh) }),
     });
     setLoading(false);
     if (res.ok) {
-      const data = await res.json();
-      setCreatedToken(data.apiToken);
+      setCreated(true);
       router.refresh();
     } else {
       const data = await res.json().catch(() => null);
@@ -42,8 +42,9 @@ export function AddServerButton() {
   function close() {
     setOpen(false);
     setForm(initial);
+    setSsh(initialSsh);
     setError(null);
-    setCreatedToken(null);
+    setCreated(false);
   }
 
   const inputCls =
@@ -58,23 +59,23 @@ export function AddServerButton() {
         + Добавить сервер
       </button>
 
-      <Modal open={open} onClose={close} title={createdToken ? "Сервер добавлен" : "Новый сервер"}>
-        {createdToken ? (
+      <Modal open={open} onClose={close} title={created ? "Установка началась" : "Новый сервер"}>
+        {created ? (
           <div>
-            <p className="mb-3 text-sm text-slate-400">
-              Токен агента для этой ноды. Он показывается <b>только один раз</b> — сохраните его и
-              пропишите в конфигурации агента:
+            <p className="mb-4 text-sm text-slate-400">
+              Панель подключается к серверу по SSH и устанавливает WireGuard, настраивает сеть и
+              запускает агента. Обычно это занимает 1–3 минуты — статус в таблице обновится
+              автоматически.
             </p>
-            <CopyField value={createdToken} mono />
             <button
               onClick={close}
-              className="mt-4 w-full rounded-lg bg-[#3987e5] px-4 py-2 text-sm font-medium text-white hover:bg-[#2a78d6]"
+              className="w-full rounded-lg bg-[#3987e5] px-4 py-2 text-sm font-medium text-white hover:bg-[#2a78d6]"
             >
-              Готово
+              Понятно
             </button>
           </div>
         ) : (
-          <form onSubmit={onSubmit} className="grid gap-3">
+          <form onSubmit={onSubmit} className="grid max-h-[70vh] gap-3 overflow-y-auto pr-1">
             <div>
               <label className="mb-1 block text-xs text-slate-400">Название</label>
               <input
@@ -131,25 +132,20 @@ export function AddServerButton() {
                 />
               </div>
             </div>
-            <div>
-              <label className="mb-1 block text-xs text-slate-400">
-                Публичный ключ WireGuard-интерфейса сервера
-              </label>
-              <input
-                required
-                className={`${inputCls} font-mono`}
-                placeholder="Base64-ключ из `wg show wg0 public-key`"
-                value={form.publicKey}
-                onChange={(e) => set("publicKey", e.target.value)}
-              />
-            </div>
+
+            <SshFields value={ssh} onChange={setSsh} />
+
+            <p className="text-xs text-slate-500">
+              Панель сама установит WireGuard и агента на сервер (Debian/Ubuntu) и получит его
+              публичный ключ.
+            </p>
             {error && <p className="text-sm text-red-400">{error}</p>}
             <button
               type="submit"
               disabled={loading}
               className="mt-1 rounded-lg bg-[#3987e5] px-4 py-2 text-sm font-medium text-white hover:bg-[#2a78d6] disabled:opacity-50"
             >
-              {loading ? "Создание..." : "Создать сервер"}
+              {loading ? "Создание..." : "Добавить и установить"}
             </button>
           </form>
         )}

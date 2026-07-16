@@ -25,8 +25,11 @@ model Server {
   port       Int      @default(51820)
   country    String // ISO-код страны, например "NL"
   city       String   @default("")
-  publicKey  String // публичный ключ WireGuard-интерфейса сервера
+  publicKey  String   @default("") // публичный ключ WG; заполняется автоустановкой
   apiToken   String   @unique // токен для агента ноды
+  // installing → active | error; active = WireGuard и агент установлены
+  status         String  @default("active")
+  provisionError String? // хвост лога установки при статусе error
   lastSeenAt DateTime? // последний отчёт агента; определяет online/offline
   createdAt  DateTime @default(now())
 

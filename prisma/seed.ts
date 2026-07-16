@@ -46,6 +46,7 @@ async function main() {
         ...s,
         publicKey: wgKey(),
         apiToken: randomBytes(32).toString("hex"),
+        status: "active",
         // первые два сервера "онлайн", третий давно молчит
         lastSeenAt: si < 2 ? new Date(now - 30_000) : new Date(now - 3600_000),
       },

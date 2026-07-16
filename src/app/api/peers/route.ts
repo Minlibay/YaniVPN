@@ -25,6 +25,12 @@ export async function POST(req: NextRequest) {
   if (!server) {
     return NextResponse.json({ error: "Сервер не найден" }, { status: 404 });
   }
+  if (server.status !== "active" || !server.publicKey) {
+    return NextResponse.json(
+      { error: "Сервер ещё не настроен — дождитесь окончания установки" },
+      { status: 409 }
+    );
+  }
 
   const keys = generateWgKeyPair();
   const allowedIp = nextClientIp(server.peers.map((p) => p.allowedIp));

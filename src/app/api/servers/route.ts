@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { generateApiToken } from "@/lib/wg";
+import { provisionServer } from "@/lib/provision";
+import { panelUrlFrom, sshSchema } from "@/lib/sshInput";
 
 const createServerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -9,7 +11,7 @@ const createServerSchema = z.object({
   port: z.coerce.number().int().min(1).max(65535).default(51820),
   country: z.string().length(2),
   city: z.string().max(100).default(""),
-  publicKey: z.string().min(1).max(100),
+  ssh: sshSchema,
 });
 
 export async function POST(req: NextRequest) {
@@ -21,15 +23,31 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
+  const { ssh, ...data } = parsed.data;
+  if (!ssh.password && !ssh.privateKey) {
+    return NextResponse.json(
+      { error: "Укажите SSH-пароль или приватный ключ" },
+      { status: 400 }
+    );
+  }
 
   const server = await prisma.server.create({
     data: {
-      ...parsed.data,
-      country: parsed.data.country.toUpperCase(),
+      ...data,
+      country: data.country.toUpperCase(),
       apiToken: generateApiToken(),
+      status: "installing",
     },
   });
 
-  // apiToken показываем один раз при создании — его нужно прописать агенту ноды
-  return NextResponse.json({ id: server.id, apiToken: server.apiToken }, { status: 201 });
+  // Установка идёт в фоне; SSH-данные живут только в этом запросе.
+  void provisionServer(
+    server.id,
+    { host: server.host, ...ssh },
+    server.port,
+    panelUrlFrom(req),
+    server.apiToken
+  );
+
+  return NextResponse.json({ id: server.id, status: "installing" }, { status: 201 });
 }

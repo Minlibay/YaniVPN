@@ -12,7 +12,10 @@ export default async function ClientsPage() {
       orderBy: { createdAt: "desc" },
       include: { server: { select: { name: true, country: true } } },
     }),
-    prisma.server.findMany({ select: { id: true, name: true, country: true } }),
+    prisma.server.findMany({
+      where: { status: "active" },
+      select: { id: true, name: true, country: true },
+    }),
   ]);
 
   return (
