@@ -42,6 +42,10 @@ class AppState extends ChangeNotifier {
   // Последняя VLESS-ссылка для импорта (когда встроенного туннеля ещё нет).
   String? vlessLinkForImport;
 
+  // Готовый .conf WireGuard для показа (веб-версия — системного VPN в браузере
+  // нет, туннель не поднять, поэтому конфиг отдаётся для проверки/импорта).
+  String? wireguardConfigForImport;
+
   /// Старт: восстанавливаем код из хранилища или регистрируем новый аккаунт.
   Future<void> init() async {
     phase = AppPhase.loading;
@@ -113,6 +117,7 @@ class AppState extends ChangeNotifier {
   Future<bool> connect(ServerInfo server) async {
     if (account == null) return false;
     vlessLinkForImport = null;
+    wireguardConfigForImport = null;
 
     if (server.isVless) {
       final res = await _api.connect(account!.code, server.id);
@@ -121,10 +126,6 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
-    _vpnStatus = VpnStatus.connecting;
-    _activeServerId = server.id;
-    notifyListeners();
-
     final keys = await WireguardKeys.forServer(server.id);
     final res = await _api.connect(
       account!.code,
@@ -132,6 +133,17 @@ class AppState extends ChangeNotifier {
       clientPublicKey: keys.publicKey,
     );
     final conf = res.configTemplate!.replaceFirst('%PRIVATE_KEY%', keys.privateKey);
+
+    // В браузере системного VPN нет — отдаём конфиг для проверки/импорта.
+    if (kIsWeb) {
+      wireguardConfigForImport = conf;
+      notifyListeners();
+      return false;
+    }
+
+    _vpnStatus = VpnStatus.connecting;
+    _activeServerId = server.id;
+    notifyListeners();
     await _vpn.connectWireguard(conf, server.id);
     // статус «connected» придёт из statusStream
     return true;
