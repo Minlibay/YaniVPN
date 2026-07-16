@@ -1,0 +1,67 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// Администратор панели
+model Admin {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  name         String
+  createdAt    DateTime @default(now())
+}
+
+// VPN-сервер (нода). На каждой ноде работает WireGuard + агент,
+// который авторизуется по apiToken и отправляет статистику.
+model Server {
+  id         String   @id @default(cuid())
+  name       String
+  host       String // публичный IP или домен
+  port       Int      @default(51820)
+  country    String // ISO-код страны, например "NL"
+  city       String   @default("")
+  publicKey  String // публичный ключ WireGuard-интерфейса сервера
+  apiToken   String   @unique // токен для агента ноды
+  lastSeenAt DateTime? // последний отчёт агента; определяет online/offline
+  createdAt  DateTime @default(now())
+
+  peers   Peer[]
+  samples StatSample[]
+}
+
+// Клиент (пир WireGuard). Позже станет учёткой пользователя мобильного приложения.
+model Peer {
+  id              String    @id @default(cuid())
+  name            String
+  publicKey       String    @unique
+  allowedIp       String // адрес клиента в туннеле, например 10.8.0.5/32
+  enabled         Boolean   @default(true)
+  lastHandshakeAt DateTime?
+  rxBytes         BigInt    @default(0) // всего принято сервером от клиента
+  txBytes         BigInt    @default(0) // всего отправлено клиенту
+  createdAt       DateTime  @default(now())
+
+  serverId String
+  server   Server @relation(fields: [serverId], references: [id], onDelete: Cascade)
+
+  @@index([serverId])
+}
+
+// Срез статистики по серверу; пишется при каждом отчёте агента.
+// По этим точкам строятся графики на дашборде.
+model StatSample {
+  id          String   @id @default(cuid())
+  serverId    String
+  server      Server   @relation(fields: [serverId], references: [id], onDelete: Cascade)
+  activePeers Int // пиры с handshake за последние 3 минуты
+  rxBytes     BigInt // суммарный rx по всем пирам на момент среза
+  txBytes     BigInt
+  sampledAt   DateTime @default(now())
+
+  @@index([serverId, sampledAt])
+}
