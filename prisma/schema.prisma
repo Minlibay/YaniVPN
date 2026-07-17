@@ -38,15 +38,24 @@ model Server {
   port     Int    @default(51820)
   country  String // ISO-код страны, например "NL"
   city     String @default("")
-  // wireguard | vless (VLESS+Reality, обход блокировок)
+  // wireguard | awg (AmneziaWG) | vless (VLESS+Reality, обход блокировок)
   protocol  String @default("wireguard")
-  publicKey String @default("") // WG: pubkey интерфейса; VLESS: Reality public key (отдаётся клиентам)
+  publicKey String @default("") // WG/AWG: pubkey интерфейса; VLESS: Reality public key (отдаётся клиентам)
   apiToken  String @unique // токен для агента ноды
 
   // Параметры VLESS+Reality (заполняются автоустановкой)
   realityPrivateKey String @default("")
-  realityShortId    String @default("") // короткий ID Reality
+  realityShortId    String @default("") // один или несколько short id Reality (CSV)
   realitySni        String @default("") // домен маскировки, напр. www.microsoft.com
+
+  // Транспорт VLESS: reality (прямое) или ws (WebSocket за Cloudflare/CDN).
+  vlessTransport String @default("reality")
+  vlessDomain    String @default("") // домен за CDN (ws)
+  vlessPath      String @default("") // ws-путь, напр. /a1b2c3
+
+  // Параметры обфускации AmneziaWG (JSON: Jc/Jmin/Jmax/S1/S2/H1..H4).
+  // Одинаковы на сервере и клиентах; генерируются при создании ноды.
+  awgParams String @default("")
 
   // installing → active | error; active = протокол и агент установлены
   status         String  @default("active")

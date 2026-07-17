@@ -88,6 +88,30 @@ class SettingsScreen extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
+                  SwitchListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: const Text('Kill-switch',
+                        style: TextStyle(fontWeight: FontWeight.w600)),
+                    subtitle: const Text(
+                      'При обрыве туннеля не пускать трафик напрямую — держать '
+                      'переподключение. Для полной блокировки включите в системе '
+                      '«Always-on VPN» + «Block connections without VPN».',
+                      style: TextStyle(color: Colors.white60, fontSize: 13),
+                    ),
+                    value: state.killSwitch,
+                    onChanged: (v) => context.read<AppState>().setKillSwitch(v),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   const Text('Войти по коду',
                       style: TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 6),

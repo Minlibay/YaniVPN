@@ -7,9 +7,10 @@
 # Настройка (переменные окружения или /etc/yanivpn-agent.env):
 #   PANEL_URL    — адрес панели, например https://panel.example.com
 #   API_TOKEN    — токен сервера из панели
-#   PROTOCOL     — wireguard | vless (по умолчанию wireguard)
-# WireGuard:
-#   WG_IFACE     — интерфейс (по умолчанию wg0)
+#   PROTOCOL     — wireguard | awg | vless (по умолчанию wireguard)
+# WireGuard / AmneziaWG:
+#   WG_IFACE     — интерфейс (по умолчанию wg0; для awg — awg0)
+#   WG_BIN       — утилита (wg или awg; по умолчанию wg)
 # VLESS (Xray):
 #   XRAY_CONFIG  — путь к config.json (по умолчанию /usr/local/etc/xray/config.json)
 #   XRAY_API     — адрес stats API (по умолчанию 127.0.0.1:10085)
@@ -24,6 +25,8 @@ PANEL_URL="${PANEL_URL:?PANEL_URL не задан}"
 API_TOKEN="${API_TOKEN:?API_TOKEN не задан}"
 PROTOCOL="${PROTOCOL:-wireguard}"
 WG_IFACE="${WG_IFACE:-wg0}"
+# Утилита управления интерфейсом: wg для WireGuard, awg для AmneziaWG.
+WG_BIN="${WG_BIN:-wg}"
 XRAY_CONFIG="${XRAY_CONFIG:-/usr/local/etc/xray/config.json}"
 XRAY_API="${XRAY_API:-127.0.0.1:10085}"
 # Интервал отчёта/синхронизации в секундах (для теста можно уменьшить)
@@ -34,7 +37,8 @@ INTERVAL="${INTERVAL:-60}"
 wg_collect() {
   # `wg show <iface> dump`: строки пиров — pubkey psk endpoint allowed-ips
   # latest-handshake rx tx keepalive. id = публичный ключ.
-  wg show "$WG_IFACE" dump | tail -n +2 | jq -R -s '
+  # $WG_BIN = wg (WireGuard) или awg (AmneziaWG) — формат дампа идентичен.
+  "$WG_BIN" show "$WG_IFACE" dump | tail -n +2 | jq -R -s '
     [ split("\n")[] | select(length > 0) | split("\t")
       | { id: .[0], latestHandshake: (.[4]|tonumber), rxBytes: (.[5]|tonumber), txBytes: (.[6]|tonumber) } ]'
 }
@@ -44,12 +48,12 @@ wg_sync() {
   local response="$1"
   echo "$response" | jq -r '.peers[] | select(.publicKey != null) | "\(.publicKey) \(.allowedIp)"' |
     while read -r pubkey allowed_ip; do
-      wg set "$WG_IFACE" peer "$pubkey" allowed-ips "$allowed_ip"
+      "$WG_BIN" set "$WG_IFACE" peer "$pubkey" allowed-ips "$allowed_ip"
     done
   local known
   known=$(echo "$response" | jq -r '.peers[].publicKey // empty')
-  wg show "$WG_IFACE" peers | while read -r pubkey; do
-    grep -qF "$pubkey" <<<"$known" || wg set "$WG_IFACE" peer "$pubkey" remove
+  "$WG_BIN" show "$WG_IFACE" peers | while read -r pubkey; do
+    grep -qF "$pubkey" <<<"$known" || "$WG_BIN" set "$WG_IFACE" peer "$pubkey" remove
   done
 }
 

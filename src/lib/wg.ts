@@ -41,7 +41,9 @@ export function buildClientConfig(opts: {
     "[Interface]",
     `PrivateKey = ${opts.clientPrivateKey}`,
     `Address = ${opts.clientAddress}`,
-    "DNS = 1.1.1.1, 8.8.8.8",
+    // Приватный резолвер на самой ноде (unbound). Запросы идут через туннель,
+    // сторонние DNS не видят посещаемые домены.
+    "DNS = 10.8.0.1",
     "",
     "[Peer]",
     `PublicKey = ${opts.serverPublicKey}`,

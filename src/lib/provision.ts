@@ -3,6 +3,7 @@ import { readFileSync } from "fs";
 import path from "path";
 import { prisma } from "./db";
 import type { Protocol } from "./vless";
+import { awgInterfaceLines, type AwgParams } from "./awg";
 
 // Автоустановка выбранного протокола на новую ноду по SSH.
 // Панель один раз подключается под root, ставит протокол (WireGuard или
@@ -21,6 +22,36 @@ const PROVISION_TIMEOUT_MS = 8 * 60 * 1000;
 function agentScriptBase64(): string {
   const file = path.join(process.cwd(), "agent", "yanivpn-agent.sh");
   return readFileSync(file).toString("base64");
+}
+
+// Приватный рекурсивный резолвер на ноде (unbound). Резолвит сам, без
+// сторонних DNS (Google/Cloudflare), поэтому список посещённых доменов не
+// утекает третьим лицам. Слушает на адресе шлюза в туннеле — клиенты ходят
+// к нему через уже зашифрованный канал. ip-freebind позволяет забиндиться
+// до поднятия интерфейса. Аргумент listenIp: 10.8.0.1 (WG/AWG) или 127.0.0.1.
+function unboundBlock(listenIp: string): string {
+  return `echo "[dns] Установка приватного резолвера (unbound)..."
+apt-get install -y -qq unbound >/dev/null 2>&1 || true
+mkdir -p /etc/unbound/unbound.conf.d
+cat > /etc/unbound/unbound.conf.d/yanivpn.conf <<UNBOUNDEOF
+server:
+  interface: ${listenIp}
+  ip-freebind: yes
+  access-control: 127.0.0.0/8 allow
+  access-control: 10.8.0.0/24 allow
+  do-ip6: no
+  hide-identity: yes
+  hide-version: yes
+  qname-minimisation: yes
+  aggressive-nsec: yes
+  harden-glue: yes
+  harden-dnssec-stripped: yes
+  cache-min-ttl: 60
+  prefetch: yes
+  rrset-roundrobin: yes
+UNBOUNDEOF
+systemctl enable unbound >/dev/null 2>&1 || true
+systemctl restart unbound >/dev/null 2>&1 || true`;
 }
 
 // Общий хвост: разворачивает агента как systemd-сервис с заданным окружением.
@@ -107,6 +138,8 @@ fi
 systemctl enable wg-quick@wg0 >/dev/null 2>&1
 systemctl restart wg-quick@wg0
 
+${unboundBlock("10.8.0.1")}
+
 echo "[4/4] Установка агента..."
 ${agentUnitBlock("PANEL_URL=$PANEL_URL\nAPI_TOKEN=$API_TOKEN\nPROTOCOL=wireguard\nWG_IFACE=wg0", "wg-quick@wg0.service")}
 
@@ -115,13 +148,123 @@ echo "YANIVPN_DONE"
 `;
 }
 
+export function buildAmneziaScript(opts: {
+  wgPort: number;
+  panelUrl: string;
+  apiToken: string;
+  params: AwgParams;
+}): string {
+  // Строки обфускации в [Interface] — те же, что получит клиент.
+  const obfLines = awgInterfaceLines(opts.params).join("\n");
+  return `#!/usr/bin/env bash
+set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+AWG_PORT=${opts.wgPort}
+PANEL_URL='${opts.panelUrl}'
+API_TOKEN='${opts.apiToken}'
+
+if ! command -v apt-get >/dev/null; then
+  echo "YANIVPN_ERROR: поддерживаются только Debian/Ubuntu (нужен apt-get)" >&2
+  exit 1
+fi
+
+echo "[1/4] Установка AmneziaWG..."
+apt-get update -y -qq
+apt-get install -y -qq software-properties-common curl jq iptables >/dev/null
+# Заголовки ядра нужны DKMS-модулю AmneziaWG (если сборка модуля потребуется).
+apt-get install -y -qq "linux-headers-$(uname -r)" >/dev/null 2>&1 || true
+# Официальный PPA AmneziaWG (пакеты amneziawg + amneziawg-tools: awg, awg-quick).
+add-apt-repository -y ppa:amnezia/ppa >/dev/null 2>&1 || true
+apt-get update -y -qq
+apt-get install -y -qq amneziawg amneziawg-tools >/dev/null 2>&1 \
+  || apt-get install -y -qq amneziawg >/dev/null 2>&1 || true
+if ! command -v awg >/dev/null || ! command -v awg-quick >/dev/null; then
+  echo "YANIVPN_ERROR: не удалось установить AmneziaWG (awg/awg-quick недоступны). Проверьте, что ядро поддерживает DKMS-модуль." >&2
+  exit 1
+fi
+
+echo "[2/4] Включение IP-форвардинга..."
+echo 'net.ipv4.ip_forward = 1' > /etc/sysctl.d/99-yanivpn.conf
+sysctl -q -p /etc/sysctl.d/99-yanivpn.conf
+
+echo "[3/4] Настройка AmneziaWG..."
+mkdir -p /etc/amnezia/amneziawg
+umask 077
+if [ ! -f /etc/amnezia/amneziawg/awg0.key ]; then
+  awg genkey > /etc/amnezia/amneziawg/awg0.key
+fi
+PRIVKEY=$(cat /etc/amnezia/amneziawg/awg0.key)
+PUBKEY=$(awg pubkey < /etc/amnezia/amneziawg/awg0.key)
+OUT_IFACE=$(ip route show default | awk '{for(i=1;i<NF;i++) if($i=="dev") print $(i+1)}' | head -n1)
+
+cat > /etc/amnezia/amneziawg/awg0.conf <<AWGEOF
+[Interface]
+Address = 10.8.0.1/24
+ListenPort = $AWG_PORT
+PrivateKey = $PRIVKEY
+${obfLines}
+PostUp = iptables -t nat -A POSTROUTING -o $OUT_IFACE -j MASQUERADE; iptables -A FORWARD -i awg0 -j ACCEPT; iptables -A FORWARD -o awg0 -j ACCEPT
+PostDown = iptables -t nat -D POSTROUTING -o $OUT_IFACE -j MASQUERADE; iptables -D FORWARD -i awg0 -j ACCEPT; iptables -D FORWARD -o awg0 -j ACCEPT
+AWGEOF
+
+# Открываем UDP-порт, если включён ufw (иначе рукопожатие не пройдёт)
+if command -v ufw >/dev/null && ufw status | grep -q "Status: active"; then
+  ufw allow "$AWG_PORT"/udp >/dev/null 2>&1 || true
+fi
+
+systemctl enable awg-quick@awg0 >/dev/null 2>&1
+systemctl restart awg-quick@awg0
+
+${unboundBlock("10.8.0.1")}
+
+echo "[4/4] Установка агента..."
+${agentUnitBlock(
+  "PANEL_URL=$PANEL_URL\nAPI_TOKEN=$API_TOKEN\nPROTOCOL=awg\nWG_IFACE=awg0\nWG_BIN=awg",
+  "awg-quick@awg0.service"
+)}
+
+echo "YANIVPN_PUBKEY=$PUBKEY"
+echo "YANIVPN_DONE"
+`;
+}
+
+export type VlessTransport = "reality" | "ws";
+
 export function buildVlessScript(opts: {
   vlessPort: number;
   panelUrl: string;
   apiToken: string;
-  shortId: string;
+  shortIds: string[];
   sni: string;
+  transport: VlessTransport;
+  domain: string; // только ws (домен за Cloudflare)
+  wsPath: string; // только ws
 }): string {
+  // JSON-массив short id для realitySettings.shortIds.
+  const shortIdsJson = JSON.stringify(opts.shortIds);
+
+  // streamSettings различаются по транспорту:
+  //   reality — прямое подключение, маскировка под чужой TLS-сайт;
+  //   ws      — VLESS+WebSocket за Cloudflare (SSL Flexible): CF терминирует
+  //             TLS для клиента и проксирует на origin по ws:80. Вход виден
+  //             как обычный HTTPS к CDN, голый IP ноды не светится.
+  const streamSettings =
+    opts.transport === "ws"
+      ? `"network": "ws",
+        "security": "none",
+        "wsSettings": { "path": "${opts.wsPath}", "headers": { "Host": "${opts.domain}" } }`
+      : `"network": "tcp",
+        "security": "reality",
+        "realitySettings": {
+          "show": false,
+          "dest": "$SNI:443",
+          "xver": 0,
+          "serverNames": ["$SNI"],
+          "privateKey": "$PRIVKEY",
+          "shortIds": $SHORT_IDS
+        }`;
+
   return `#!/usr/bin/env bash
 set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -129,7 +272,7 @@ export DEBIAN_FRONTEND=noninteractive
 VLESS_PORT=${opts.vlessPort}
 PANEL_URL='${opts.panelUrl}'
 API_TOKEN='${opts.apiToken}'
-SHORT_ID='${opts.shortId}'
+SHORT_IDS='${shortIdsJson}'
 SNI='${opts.sni}'
 XRAY_CONFIG=/usr/local/etc/xray/config.json
 
@@ -153,11 +296,12 @@ if [ -z "$PRIVKEY" ] || [ -z "$PUBKEY" ]; then
   exit 1
 fi
 
-echo "[3/4] Настройка Xray (VLESS + Reality)..."
+echo "[3/4] Настройка Xray (VLESS)..."
 mkdir -p /usr/local/etc/xray
 cat > "$XRAY_CONFIG" <<XRAYEOF
 {
-  "log": { "loglevel": "warning" },
+  "log": { "loglevel": "none" },
+  "dns": { "servers": ["127.0.0.1", "localhost"] },
   "stats": {},
   "api": { "tag": "api", "services": ["StatsService"] },
   "policy": {
@@ -172,16 +316,7 @@ cat > "$XRAY_CONFIG" <<XRAYEOF
       "protocol": "vless",
       "settings": { "clients": [], "decryption": "none" },
       "streamSettings": {
-        "network": "tcp",
-        "security": "reality",
-        "realitySettings": {
-          "show": false,
-          "dest": "$SNI:443",
-          "xver": 0,
-          "serverNames": ["$SNI"],
-          "privateKey": "$PRIVKEY",
-          "shortIds": ["$SHORT_ID"]
-        }
+        ${streamSettings}
       },
       "sniffing": { "enabled": true, "destOverride": ["http", "tls", "quic"] }
     },
@@ -194,7 +329,7 @@ cat > "$XRAY_CONFIG" <<XRAYEOF
     }
   ],
   "outbounds": [
-    { "protocol": "freedom", "tag": "direct" },
+    { "protocol": "freedom", "tag": "direct", "settings": { "domainStrategy": "UseIP" } },
     { "protocol": "blackhole", "tag": "block" }
   ],
   "routing": {
@@ -210,6 +345,8 @@ fi
 
 systemctl enable xray >/dev/null 2>&1
 systemctl restart xray
+
+${unboundBlock("127.0.0.1")}
 
 echo "[4/4] Установка агента..."
 ${agentUnitBlock(
@@ -284,8 +421,12 @@ export type ProvisionParams = {
   port: number;
   panelUrl: string;
   apiToken: string;
-  shortId: string; // только VLESS
-  sni: string; // только VLESS
+  shortIds: string[]; // только VLESS
+  sni: string; // только VLESS (reality)
+  transport: VlessTransport; // только VLESS
+  domain: string; // только VLESS (ws/CDN)
+  wsPath: string; // только VLESS (ws/CDN)
+  awgParams: AwgParams | null; // только AmneziaWG
 };
 
 // Запускается без await из POST /api/servers: статус пишется в БД,
@@ -296,20 +437,39 @@ export async function provisionServer(
   params: ProvisionParams
 ): Promise<void> {
   try {
-    const script =
-      params.protocol === "vless"
-        ? buildVlessScript({
-            vlessPort: params.port,
-            panelUrl: params.panelUrl,
-            apiToken: params.apiToken,
-            shortId: params.shortId,
-            sni: params.sni,
-          })
-        : buildWireguardScript({
-            wgPort: params.port,
-            panelUrl: params.panelUrl,
-            apiToken: params.apiToken,
-          });
+    let script: string;
+    if (params.protocol === "vless") {
+      script = buildVlessScript({
+        vlessPort: params.port,
+        panelUrl: params.panelUrl,
+        apiToken: params.apiToken,
+        shortIds: params.shortIds,
+        sni: params.sni,
+        transport: params.transport,
+        domain: params.domain,
+        wsPath: params.wsPath,
+      });
+    } else if (params.protocol === "awg") {
+      if (!params.awgParams) {
+        await prisma.server.update({
+          where: { id: serverId },
+          data: { status: "error", provisionError: "Отсутствуют параметры обфускации AmneziaWG" },
+        });
+        return;
+      }
+      script = buildAmneziaScript({
+        wgPort: params.port,
+        panelUrl: params.panelUrl,
+        apiToken: params.apiToken,
+        params: params.awgParams,
+      });
+    } else {
+      script = buildWireguardScript({
+        wgPort: params.port,
+        panelUrl: params.panelUrl,
+        apiToken: params.apiToken,
+      });
+    }
 
     const { code, output } = await sshExec(ssh, script);
     const failed = (msg: string) =>

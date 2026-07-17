@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { buildClientConfig, generateWgKeyPair, nextClientIp } from "@/lib/wg";
-import { buildVlessLink, generateClientUuid } from "@/lib/vless";
+import { buildVlessLink, buildVlessWsLink, generateClientUuid, pickShortId } from "@/lib/vless";
+import { buildAmneziaClientConfig, parseAwgParams } from "@/lib/awg";
 
 const createPeerSchema = z.object({
   name: z.string().min(1).max(100),
@@ -39,15 +40,23 @@ export async function POST(req: NextRequest) {
     const peer = await prisma.peer.create({
       data: { name: parsed.data.name, uuid, serverId: server.id },
     });
-    const link = buildVlessLink({
-      uuid,
-      host: server.host,
-      port: server.port,
-      publicKey: server.publicKey,
-      shortId: server.realityShortId,
-      sni: server.realitySni,
-      name: `${parsed.data.name}@${server.name}`,
-    });
+    const link =
+      server.vlessTransport === "ws"
+        ? buildVlessWsLink({
+            uuid,
+            domain: server.vlessDomain,
+            path: server.vlessPath,
+            name: `${parsed.data.name}@${server.name}`,
+          })
+        : buildVlessLink({
+            uuid,
+            host: server.host,
+            port: server.port,
+            publicKey: server.publicKey,
+            shortId: pickShortId(server.realityShortId),
+            sni: server.realitySni,
+            name: `${parsed.data.name}@${server.name}`,
+          });
     return NextResponse.json(
       { id: peer.id, protocol: "vless", uuid, link, config: link },
       { status: 201 }
@@ -65,6 +74,26 @@ export async function POST(req: NextRequest) {
       serverId: server.id,
     },
   });
+
+  // AmneziaWG: конфиг с блоком обфускации (параметры совпадают с серверными).
+  if (server.protocol === "awg") {
+    const params = parseAwgParams(server.awgParams);
+    if (!params) {
+      return NextResponse.json({ error: "Сервер настроен некорректно" }, { status: 500 });
+    }
+    const config = buildAmneziaClientConfig({
+      clientPrivateKey: keys.privateKey,
+      clientAddress: allowedIp,
+      serverPublicKey: server.publicKey,
+      serverHost: server.host,
+      serverPort: server.port,
+      params,
+    });
+    return NextResponse.json(
+      { id: peer.id, protocol: "awg", publicKey: keys.publicKey, allowedIp, config },
+      { status: 201 }
+    );
+  }
 
   const config = buildClientConfig({
     clientPrivateKey: keys.privateKey,

@@ -61,6 +61,15 @@ class _Content extends StatelessWidget {
                 'туннель VLESS появится в следующих версиях.',
             body: state.vlessLinkForImport!,
           );
+        } else if (state.awgConfigForImport != null) {
+          await _showConfigSheet(
+            context,
+            title: 'Конфигурация AmneziaWG',
+            note: 'Обфусцированный WireGuard против DPI. Импортируйте конфиг в '
+                'приложение AmneziaWG (junk-пакеты и заголовки уже прописаны). '
+                'Встроенный туннель AmneziaWG появится в следующих версиях.',
+            body: state.awgConfigForImport!,
+          );
         } else if (state.wireguardConfigForImport != null) {
           await _showConfigSheet(
             context,
@@ -71,6 +80,39 @@ class _Content extends StatelessWidget {
             body: state.wireguardConfigForImport!,
           );
         }
+      }
+    } on ApiException catch (e) {
+      if (e.isQuotaExceeded && context.mounted) {
+        await state.refreshUsage();
+        if (context.mounted) {
+          Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const PaywallScreen()),
+          );
+        }
+      } else {
+        messenger.showSnackBar(SnackBar(content: Text(e.message)));
+      }
+    } catch (e) {
+      messenger.showSnackBar(SnackBar(content: Text('$e')));
+    }
+  }
+
+  Future<void> _connectAuto(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final server = await state.connectAuto();
+      if (!context.mounted) return;
+      if (server != null) {
+        messenger.showSnackBar(
+          SnackBar(content: Text('Подключено: ${server.flag} ${server.name}')),
+        );
+      } else {
+        messenger.showSnackBar(
+          const SnackBar(
+            content: Text('Не удалось подключиться ни к одному серверу. '
+                'Попробуйте AmneziaWG или VLESS вручную.'),
+          ),
+        );
       }
     } on ApiException catch (e) {
       if (e.isQuotaExceeded && context.mounted) {
@@ -159,6 +201,32 @@ class _Content extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 20),
+          if (state.servers.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 16),
+              child: SizedBox(
+                width: double.infinity,
+                child: FilledButton.icon(
+                  icon: (state.isBusy || state.isReconnecting)
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.bolt, size: 20),
+                  label: Text(
+                    state.isReconnecting
+                        ? 'Переподключение…'
+                        : state.isConnected
+                            ? 'Подключено'
+                            : 'Авто-подключение',
+                  ),
+                  onPressed: (state.isBusy || state.isConnected || state.isReconnecting)
+                      ? null
+                      : () => _connectAuto(context),
+                ),
+              ),
+            ),
           Text('Серверы', style: Theme.of(context).textTheme.titleMedium),
           const SizedBox(height: 8),
           if (state.servers.isEmpty)

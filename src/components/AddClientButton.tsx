@@ -156,7 +156,12 @@ export function AddClientButton({ servers }: { servers: ServerOption[] }) {
               >
                 {servers.map((s) => (
                   <option key={s.id} value={s.id}>
-                    {s.label} · {s.protocol === "vless" ? "VLESS" : "WireGuard"}
+                    {s.label} ·{" "}
+                    {s.protocol === "vless"
+                      ? "VLESS"
+                      : s.protocol === "awg"
+                        ? "AmneziaWG"
+                        : "WireGuard"}
                   </option>
                 ))}
               </select>

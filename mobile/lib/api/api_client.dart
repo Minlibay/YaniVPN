@@ -23,14 +23,17 @@ class ConnectResult {
   ConnectResult.wireguard({required this.address, required this.configTemplate})
       : protocol = 'wireguard',
         link = null;
+  ConnectResult.awg({required this.address, required this.configTemplate})
+      : protocol = 'awg',
+        link = null;
   ConnectResult.vless({required this.link})
       : protocol = 'vless',
         address = null,
         configTemplate = null;
 
   final String protocol;
-  final String? address; // WG: адрес в туннеле
-  final String? configTemplate; // WG: .conf с плейсхолдером %PRIVATE_KEY%
+  final String? address; // WG/AWG: адрес в туннеле
+  final String? configTemplate; // WG/AWG: .conf с плейсхолдером %PRIVATE_KEY%
   final String? link; // VLESS: vless://…
 }
 
@@ -116,6 +119,12 @@ class ApiClient {
     final json = jsonDecode(r.body) as Map<String, dynamic>;
     if (json['protocol'] == 'vless') {
       return ConnectResult.vless(link: json['link'] as String);
+    }
+    if (json['protocol'] == 'awg') {
+      return ConnectResult.awg(
+        address: json['address'] as String,
+        configTemplate: json['configTemplate'] as String,
+      );
     }
     return ConnectResult.wireguard(
       address: json['address'] as String,
