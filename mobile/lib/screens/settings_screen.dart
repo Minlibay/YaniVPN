@@ -266,5 +266,6 @@ class SettingsScreen extends StatelessWidget {
         );
       },
     );
+    controller.dispose();
   }
 }

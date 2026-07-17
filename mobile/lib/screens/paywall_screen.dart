@@ -41,7 +41,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
     } catch (e) {
       setState(() {
         _busy = false;
-        _error = '$e';
+        _error = friendlyError(e);
       });
     }
   }

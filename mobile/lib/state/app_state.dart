@@ -83,7 +83,9 @@ class AppState extends ChangeNotifier {
     if (_engine != _Engine.none && from != _engine) return;
     _vpnStatus = s;
     if (s == VpnStatus.connected) _reconnecting = false;
-    if (s == VpnStatus.disconnected) {
+    // «error» от движка — туннель мёртв: чистим состояние так же, как при
+    // обрыве, иначе UI зависает с активным сервером, а kill-switch молчит.
+    if (s == VpnStatus.disconnected || s == VpnStatus.error) {
       _activeServerId = null;
       _engine = _Engine.none;
       // Неожиданный обрыв при включённом kill-switch → авто-реконнект.
@@ -157,7 +159,7 @@ class AppState extends ChangeNotifier {
 
   void _fail(Object e) {
     phase = AppPhase.error;
-    errorMessage = e.toString();
+    errorMessage = friendlyError(e);
   }
 
   Future<void> refreshServers() async {
@@ -212,7 +214,12 @@ class AppState extends ChangeNotifier {
         _vpnStatus = VpnStatus.connecting;
         _activeServerId = server.id;
         notifyListeners();
-        await _singbox.start(link);
+        try {
+          await _singbox.start(link);
+        } catch (e) {
+          _resetAfterFailedStart();
+          rethrow;
+        }
         return true;
       }
       // Иначе — ссылка для импорта во внешний клиент (v2rayNG/Streisand).
@@ -227,7 +234,7 @@ class AppState extends ChangeNotifier {
       server.id,
       clientPublicKey: keys.publicKey,
     );
-    final conf = res.configTemplate!.replaceFirst('%PRIVATE_KEY%', keys.privateKey);
+    var conf = res.configTemplate!.replaceFirst('%PRIVATE_KEY%', keys.privateKey);
 
     // AmneziaWG плагином не туннелируется — отдаём .conf для импорта в AmneziaWG.
     if (server.isAwg) {
@@ -236,6 +243,10 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
+    // MTU: без него крупные пакеты (веб-страницы) фрагментируются и «застревают»,
+    // хотя мессенджеры работают. 1280 безопасно проходит через любой канал.
+    conf = _withMtu(conf);
+
     // В браузере системного VPN нет — отдаём конфиг для проверки/импорта.
     if (kIsWeb) {
       wireguardConfigForImport = conf;
@@ -243,15 +254,44 @@ class AppState extends ChangeNotifier {
       return false;
     }
 
+    // Реальный хост сервера из конфига (а не id) — нужен плагину туннеля.
+    final endpointHost =
+        RegExp(r'Endpoint\s*=\s*([^:\s]+)').firstMatch(conf)?.group(1) ?? server.id;
+
     _engine = _Engine.wireguard;
     _desiredServer = server;
     _userWantsConnected = true;
     _vpnStatus = VpnStatus.connecting;
     _activeServerId = server.id;
     notifyListeners();
-    await _vpn.connectWireguard(conf, server.id);
+    try {
+      await _vpn.connectWireguard(conf, endpointHost);
+    } catch (e) {
+      _resetAfterFailedStart();
+      rethrow;
+    }
     // статус «connected» придёт из statusStream
     return true;
+  }
+
+  // Запуск туннеля упал исключением — возвращаем состояние «отключено»,
+  // иначе UI навсегда остаётся в «Соединение…».
+  void _resetAfterFailedStart() {
+    _engine = _Engine.none;
+    _activeServerId = null;
+    _desiredServer = null;
+    _userWantsConnected = false;
+    _vpnStatus = VpnStatus.disconnected;
+    notifyListeners();
+  }
+
+  // Добавляет MTU в [Interface], если его там ещё нет.
+  String _withMtu(String conf) {
+    if (conf.contains(RegExp(r'^\s*MTU\s*=', multiLine: true))) return conf;
+    if (conf.contains('\n\n[Peer]')) {
+      return conf.replaceFirst('\n\n[Peer]', '\nMTU = 1280\n\n[Peer]');
+    }
+    return conf.replaceFirst('[Peer]', 'MTU = 1280\n\n[Peer]');
   }
 
   Future<void> disconnect() async {

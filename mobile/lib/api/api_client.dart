@@ -18,6 +18,22 @@ class ApiException implements Exception {
   String toString() => message;
 }
 
+/// Человеческий текст ошибки для показа пользователю: сетевые сбои и таймауты
+/// сводятся к одному понятному сообщению вместо сырого текста исключения.
+String friendlyError(Object e) {
+  if (e is ApiException) return e.message;
+  final s = e.toString();
+  if (s.contains('SocketException') ||
+      s.contains('ClientException') ||
+      s.contains('TimeoutException') ||
+      s.contains('HandshakeException') ||
+      s.contains('Connection refused') ||
+      s.contains('Failed host lookup')) {
+    return 'Нет связи с сервером. Проверьте подключение к интернету.';
+  }
+  return 'Что-то пошло не так: $s';
+}
+
 /// Результат /api/app/connect.
 class ConnectResult {
   ConnectResult.wireguard({required this.address, required this.configTemplate})

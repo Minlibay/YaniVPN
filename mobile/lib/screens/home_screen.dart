@@ -99,7 +99,7 @@ class _Content extends StatelessWidget {
         messenger.showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -144,7 +144,7 @@ class _Content extends StatelessWidget {
         messenger.showSnackBar(SnackBar(content: Text(e.message)));
       }
     } catch (e) {
-      messenger.showSnackBar(SnackBar(content: Text('$e')));
+      messenger.showSnackBar(SnackBar(content: Text(friendlyError(e))));
     }
   }
 
@@ -209,7 +209,7 @@ class _Content extends StatelessWidget {
     final connected = state.isConnected;
 
     final statusText = connecting
-        ? 'Устанавливаем защищённое соединение…'
+        ? 'Устанавливаем защищённое соединение…\nНажмите ещё раз, чтобы отменить'
         : connected
             ? 'Ваш трафик зашифрован'
             : 'Нажмите, чтобы подключиться';
@@ -227,9 +227,11 @@ class _Content extends StatelessWidget {
             child: ConnectButton(
               connected: connected,
               connecting: connecting,
-              enabled: selected != null && !connecting,
+              enabled: connected || connecting || selected != null,
               onTap: () {
-                if (connected) {
+                // Во время подключения тап отменяет попытку — «зависшее»
+                // соединение всегда можно прервать.
+                if (connected || connecting) {
                   state.disconnect();
                 } else if (selected != null) {
                   _connect(context, selected);
