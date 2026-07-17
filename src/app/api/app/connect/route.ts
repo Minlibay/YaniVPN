@@ -3,7 +3,8 @@ import { z } from "zod";
 import { prisma } from "@/lib/db";
 import { accountFromRequest, accountUsage } from "@/lib/account";
 import { buildClientConfig, nextClientIp } from "@/lib/wg";
-import { buildVlessLink, generateClientUuid } from "@/lib/vless";
+import { buildVlessLink, buildVlessWsLink, generateClientUuid, pickShortId } from "@/lib/vless";
+import { buildAmneziaClientConfig, parseAwgParams } from "@/lib/awg";
 
 const schema = z.object({
   serverId: z.string().min(1),
@@ -60,19 +61,28 @@ export async function POST(req: NextRequest) {
         data: { name: `app-${account.code.slice(-4)}`, uuid, serverId: server.id, accountId: account.id },
       });
     }
-    const link = buildVlessLink({
-      uuid,
-      host: server.host,
-      port: server.port,
-      publicKey: server.publicKey,
-      shortId: server.realityShortId,
-      sni: server.realitySni,
-      name: `YaniVPN@${server.name}`,
-    });
+    // ws (за CDN) — ссылка на домен; reality — прямое подключение с short id.
+    const link =
+      server.vlessTransport === "ws"
+        ? buildVlessWsLink({
+            uuid,
+            domain: server.vlessDomain,
+            path: server.vlessPath,
+            name: `YaniVPN@${server.name}`,
+          })
+        : buildVlessLink({
+            uuid,
+            host: server.host,
+            port: server.port,
+            publicKey: server.publicKey,
+            shortId: pickShortId(server.realityShortId), // случайный из пула ноды
+            sni: server.realitySni,
+            name: `YaniVPN@${server.name}`,
+          });
     return NextResponse.json({ protocol: "vless", link });
   }
 
-  // WireGuard: устройство генерирует пару ключей и присылает публичный.
+  // WireGuard / AmneziaWG: устройство генерирует пару ключей и присылает публичный.
   if (!parsed.data.clientPublicKey) {
     return NextResponse.json(
       { error: "Для WireGuard нужен публичный ключ клиента" },
@@ -94,6 +104,29 @@ export async function POST(req: NextRequest) {
         serverId: server.id,
         accountId: account.id,
       },
+    });
+  }
+
+  // AmneziaWG: тот же обмен ключами WG, но конфиг содержит блок обфускации.
+  if (server.protocol === "awg") {
+    const params = parseAwgParams(server.awgParams);
+    if (!params) {
+      return NextResponse.json({ error: "Сервер настроен некорректно" }, { status: 500 });
+    }
+    return NextResponse.json({
+      protocol: "awg",
+      address: allowedIp,
+      serverPublicKey: server.publicKey,
+      endpoint: `${server.host}:${server.port}`,
+      dns: "10.8.0.1",
+      configTemplate: buildAmneziaClientConfig({
+        clientPrivateKey: "%PRIVATE_KEY%",
+        clientAddress: allowedIp,
+        serverPublicKey: server.publicKey,
+        serverHost: server.host,
+        serverPort: server.port,
+        params,
+      }),
     });
   }
 

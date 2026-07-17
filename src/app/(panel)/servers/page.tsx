@@ -5,15 +5,30 @@ import { ServerActions } from "@/components/ServerActions";
 import { AutoRefresh } from "@/components/AutoRefresh";
 
 function ProtocolBadge({ protocol }: { protocol: string }) {
-  const vless = protocol === "vless";
+  const meta =
+    protocol === "vless"
+      ? {
+          cls: "bg-[#008300]/15 text-emerald-400",
+          title: "VLESS + Reality — обход блокировок",
+          label: "VLESS",
+        }
+      : protocol === "awg"
+        ? {
+            cls: "bg-[#a855f7]/15 text-purple-300",
+            title: "AmneziaWG — WireGuard с обфускацией против DPI",
+            label: "AmneziaWG",
+          }
+        : {
+            cls: "bg-[#3987e5]/15 text-[#7db4f0]",
+            title: "WireGuard",
+            label: "WireGuard",
+          };
   return (
     <span
-      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${
-        vless ? "bg-[#008300]/15 text-emerald-400" : "bg-[#3987e5]/15 text-[#7db4f0]"
-      }`}
-      title={vless ? "VLESS + Reality — обход блокировок" : "WireGuard"}
+      className={`inline-block rounded-md px-2 py-0.5 text-xs font-medium ${meta.cls}`}
+      title={meta.title}
     >
-      {vless ? "VLESS" : "WireGuard"}
+      {meta.label}
     </span>
   );
 }

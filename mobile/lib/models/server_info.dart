@@ -13,10 +13,15 @@ class ServerInfo {
   final String name;
   final String country; // ISO-код, напр. NL
   final String city;
-  final String protocol; // wireguard | vless
+  final String protocol; // wireguard | awg | vless
   final bool online;
 
   bool get isVless => protocol == 'vless';
+  bool get isAwg => protocol == 'awg';
+
+  // Что приложение умеет туннелировать штатным плагином прямо сейчас.
+  // AmneziaWG и VLESS требуют своих движков — пока отдаются конфигом/ссылкой.
+  bool get canTunnel => protocol == 'wireguard';
 
   /// Флаг-эмодзи из ISO-кода страны (NL → 🇳🇱).
   String get flag {

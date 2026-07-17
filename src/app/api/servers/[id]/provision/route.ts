@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { provisionServer } from "@/lib/provision";
 import { panelUrlFrom, sshSchema } from "@/lib/sshInput";
-import { isProtocol } from "@/lib/vless";
+import { isProtocol, parseShortIds } from "@/lib/vless";
+import { parseAwgParams } from "@/lib/awg";
 
 type Params = { params: { id: string } };
 
@@ -38,8 +39,12 @@ export async function POST(req: NextRequest, { params }: Params) {
       port: server.port,
       panelUrl: panelUrlFrom(req),
       apiToken: server.apiToken,
-      shortId: server.realityShortId,
+      shortIds: parseShortIds(server.realityShortId),
       sni: server.realitySni,
+      transport: server.vlessTransport === "ws" ? "ws" : "reality",
+      domain: server.vlessDomain,
+      wsPath: server.vlessPath,
+      awgParams: parseAwgParams(server.awgParams),
     }
   );
 

@@ -77,7 +77,7 @@ class ServerTile extends StatelessWidget {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          _ProtocolChip(vless: server.isVless),
+                          _ProtocolChip(protocol: server.protocol),
                           if (server.city.isNotEmpty) ...[
                             const SizedBox(width: 8),
                             Flexible(
@@ -130,12 +130,16 @@ class _OnlineDot extends StatelessWidget {
 }
 
 class _ProtocolChip extends StatelessWidget {
-  const _ProtocolChip({required this.vless});
-  final bool vless;
+  const _ProtocolChip({required this.protocol});
+  final String protocol; // wireguard | awg | vless
 
   @override
   Widget build(BuildContext context) {
-    final color = vless ? kSuccess : const Color(0xFF7DB4F0);
+    final (color, label) = switch (protocol) {
+      'vless' => (kSuccess, 'VLESS'),
+      'awg' => (const Color(0xFFC084FC), 'AmneziaWG'),
+      _ => (const Color(0xFF7DB4F0), 'WireGuard'),
+    };
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -144,7 +148,7 @@ class _ProtocolChip extends StatelessWidget {
         border: Border.all(color: color.withValues(alpha: 0.25)),
       ),
       child: Text(
-        vless ? 'VLESS' : 'WireGuard',
+        label,
         style: TextStyle(color: color, fontSize: 10.5, fontWeight: FontWeight.w700),
       ),
     );

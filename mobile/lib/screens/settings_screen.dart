@@ -6,7 +6,7 @@ import 'package:qr_flutter/qr_flutter.dart';
 import '../state/app_state.dart';
 import '../theme.dart';
 
-/// Настройки: показ личного конфиг-кода (+ QR) и вход по коду с другого устройства.
+/// Настройки: показ личного конфиг-кода (+ QR), kill-switch и вход по коду.
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -100,6 +100,45 @@ class SettingsScreen extends StatelessWidget {
                           );
                         },
                       ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: kBrandBlue.withValues(alpha: 0.12),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: const Icon(Icons.shield_rounded,
+                              color: kBrandBlue, size: 20),
+                        ),
+                        const SizedBox(width: 10),
+                        const Text('Kill-switch',
+                            style: TextStyle(fontWeight: FontWeight.w600)),
+                        const Spacer(),
+                        Switch(
+                          value: state.killSwitch,
+                          onChanged: (v) => context.read<AppState>().setKillSwitch(v),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'При обрыве туннеля не пускать трафик напрямую — держать '
+                      'переподключение. Для полной блокировки включите в системе '
+                      '«Always-on VPN» + «Block connections without VPN».',
+                      style: TextStyle(color: kTextDim, fontSize: 13),
                     ),
                   ],
                 ),
